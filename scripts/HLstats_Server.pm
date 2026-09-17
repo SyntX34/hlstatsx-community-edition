@@ -239,7 +239,7 @@ sub get_game_mod_opts
 	if ($self->{mod} ne "") {
 		my $mod = $self->{mod};
 			
-		if ($mod eq "SOURCEMOD") {
+		if ($mod eq "SOURCEMOD" || $mod eq "SWIFTLYS2") {
 			$self->{browse_command} = "hlx_sm_browse";
 			$self->{swap_command} = "hlx_sm_swap";
 			$self->{global_chat_command} = "hlx_sm_psay";
@@ -1375,7 +1375,7 @@ sub messageMany
 	my($self, $msg, $toall, @userlist) = @_;
 	if (scalar(@userlist) > 0)
 	{
-		if ($self->{mod} eq "SOURCEMOD")
+		if ($self->{mod} eq "SOURCEMOD" || $self->{mod} eq "SWIFTLYS2")
 		{
 			my $usersendlist = "";
 			foreach (@userlist)

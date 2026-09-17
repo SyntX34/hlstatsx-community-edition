@@ -1,0 +1,7 @@
+[HLStatsX]
+DaemonHost = "127.0.0.1"
+DaemonPort = 27500
+ServerIp = "5.135.143.217"
+ServerPort = 27015
+ProxyKey = ""
+MaxPlayers = 32

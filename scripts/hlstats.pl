@@ -2020,7 +2020,7 @@ while ($loop = &getLine()) {
 			}    
 		}
 
-		if (($s_output =~ /^.*PROXY Key=(.+) (.*)PROXY.+/) && $proxy_key ne "") {
+		if (($s_output =~ /^.*PROXY Key=(.+?)\s+([^ ]+?)PROXY.+/) && $proxy_key ne "") {
 			$rproxy_key = $1;
 			$s_addr = $2;
 
@@ -2045,7 +2045,7 @@ while ($loop = &getLine()) {
 					&printEvent("PROXY", $s_output);
 				}
 			} else {
-				&printEvent("PROXY", "proxy_key mismatch, dropping package");
+				&printEvent("PROXY", "proxy_key mismatch (expected '$proxy_key', got '$rproxy_key'), dropping package");
 				&printEvent("PROXY", $s_output) if ($g_debug > 2);
 				$s_output = "";
 				next;
@@ -3123,7 +3123,7 @@ while ($loop = &getLine()) {
 			}
 			elsif (like($ev_verb, "STEAM USERID validated") || like($ev_verb, "VALVE USERID validated")) {               
 				
-				my $isCSGO = ($g_servers{$s_addr}->{play_game} == CSGO());
+				my $isCSGO = ($g_servers{$s_addr}->{play_game} == CSGO() || $g_servers{$s_addr}->{play_game} == CS2());
 				my $playerinfo = &getPlayerInfo($ev_player, $isCSGO ? 1 : 0);
 	
 				if ($playerinfo) {                       
@@ -3332,6 +3332,23 @@ while ($loop = &getLine()) {
 						$ev_obj_a
 						);
 					}
+				}
+			} elsif (like($ev_verb, "server_cvar:")) {
+				$ev_type = 21;
+				my $cvar_val = "";
+				if ($ev_properties =~ /"([^"]+)"/) {
+					$cvar_val = $1;
+				}
+				if ($ev_obj_a eq "maxplayers" || $ev_obj_a eq "sv_visiblemaxplayers") {
+					my $mp = int($cvar_val);
+					if ($mp > 0) {
+						$g_servers{$s_addr}->set("maxplayers", $mp);
+						$g_servers{$s_addr}->updateDB();
+						$ev_status = "Server maxplayers updated to $mp";
+					}
+				}
+				if ($ev_status eq "") {
+					$ev_status = "server_cvar: $ev_obj_a = $cvar_val";
 				}
 			} elsif (like($ev_verb, "Loading map")) {
 				$ev_type = 19;

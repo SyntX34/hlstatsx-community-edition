@@ -1,0 +1,330 @@
+<?php
+    if ( !defined('IN_UPDATER') )
+    {
+        die('Do not access this file directly.');
+    }
+
+    $dbversion = 83;
+
+    print "Adding Counter-Strike 2 (cs2) game support and SwiftlyS2 plugin settings...<br />";
+
+    // 0. Supported Mod & Defaults
+    $db->query("
+        INSERT IGNORE INTO `hlstats_Mods_Supported` (`code`, `name`) VALUES
+            ('SWIFTLYS2', 'SwiftlyS2');
+    ");
+
+    $db->query("
+        INSERT IGNORE INTO `hlstats_Mods_Defaults` (`code`, `parameter`, `value`) VALUES
+            ('SWIFTLYS2', 'BroadCastEventsCommand', 'hlx_sm_psay'),
+            ('SWIFTLYS2', 'BroadCastEventsCommandAnnounce', 'hlx_sm_csay'),
+            ('SWIFTLYS2', 'PlayerEventsAdminCommand', ''),
+            ('SWIFTLYS2', 'PlayerEventsCommand', 'hlx_sm_psay'),
+            ('SWIFTLYS2', 'PlayerEventsCommandOSD', 'hlx_sm_msay'),
+            ('SWIFTLYS2', 'PlayerEventsCommandHint', 'hlx_sm_hint');
+    ");
+
+    // 1. Game Definition
+    $db->query("
+        INSERT INTO `hlstats_Games` (`code`, `name`, `realgame`, `hidden`) VALUES
+            ('cs2', 'Counter-Strike 2', 'cs2', '0')
+        ON DUPLICATE KEY UPDATE `name`=VALUES(`name`), `realgame`=VALUES(`realgame`);
+    ");
+
+    // 2. Game Defaults
+    $db->query("
+        INSERT IGNORE INTO `hlstats_Games_Defaults` (`code`, `parameter`, `value`) VALUES
+            ('cs2', 'Admins', ''),
+            ('cs2', 'AutoBanRetry', '0'),
+            ('cs2', 'AutoTeamBalance', '0'),
+            ('cs2', 'BonusRoundIgnore', '0'),
+            ('cs2', 'BonusRoundTime', '0'),
+            ('cs2', 'BroadCastEvents', '1'),
+            ('cs2', 'BroadCastEventsCommand', 'hlx_sm_psay'),
+            ('cs2', 'BroadCastEventsCommandAnnounce', 'hlx_sm_psay'),
+            ('cs2', 'BroadCastPlayerActions', '1'),
+            ('cs2', 'ConnectAnnounce', '1'),
+            ('cs2', 'DefaultDisplayEvents', '1'),
+            ('cs2', 'DisplayResultsInBrowser', '0'),
+            ('cs2', 'EnablePublicCommands', '1'),
+            ('cs2', 'GameEngine', '3'),
+            ('cs2', 'GameType', '0'),
+            ('cs2', 'HLStatsURL', 'http://yoursite.com/hlstats'),
+            ('cs2', 'IgnoreBots', '1'),
+            ('cs2', 'MinimumPlayersRank', '0'),
+            ('cs2', 'MinPlayers', '4'),
+            ('cs2', 'PlayerEvents', '1'),
+            ('cs2', 'PlayerEventsCommand', 'hlx_sm_psay'),
+            ('cs2', 'PlayerEventsCommandHint', 'hlx_sm_hint'),
+            ('cs2', 'PlayerEventsCommandOSD', 'hlx_sm_msay'),
+            ('cs2', 'ShowStats', '1'),
+            ('cs2', 'SkillMode', '0'),
+            ('cs2', 'SuicidePenalty', '5'),
+            ('cs2', 'SwitchAdmins', '0'),
+            ('cs2', 'TKPenalty', '25'),
+            ('cs2', 'TrackServerLoad', '1'),
+            ('cs2', 'UpdateHostname', '1');
+    ");
+
+    // 3. Teams
+    $db->query("
+        INSERT IGNORE INTO `hlstats_Teams` (`game`, `code`, `name`, `hidden`, `playerlist_bgcolor`, `playerlist_color`, `playerlist_index`) VALUES
+            ('cs2', 'TERRORIST', 'Terrorist', '0', '#FFD5D5', '#FF2D2D', 1),
+            ('cs2', 'CT', 'Counter-Terrorist', '0', '#D2E8F7', '#0080C0', 2);
+    ");
+
+    // 4. Actions
+    $db->query("
+        INSERT IGNORE INTO `hlstats_Actions` (`game`, `code`, `reward_player`, `reward_team`, `team`, `description`, `for_PlayerActions`, `for_PlayerPlayerActions`, `for_TeamActions`, `for_WorldActions`) VALUES
+            ('cs2', 'Begin_Bomb_Defuse_Without_Kit', 0, 0, 'CT', 'Start Defusing the Bomb Without a Defuse Kit', '1', '0', '0', '0'),
+            ('cs2', 'Begin_Bomb_Defuse_With_Kit', 0, 0, 'CT', 'Start Defusing the Bomb With a Defuse Kit', '1', '0', '0', '0'),
+            ('cs2', 'Planted_The_Bomb', 10, 2, 'TERRORIST', 'Plant the Bomb', '1', '0', '0', '0'),
+            ('cs2', 'Defused_The_Bomb', 10, 0, 'CT', 'Defuse the Bomb', '1', '0', '0', '0'),
+            ('cs2', 'Touched_A_Hostage', 0, 0, 'CT', 'Touch a Hostage', '1', '0', '0', '0'),
+            ('cs2', 'Rescued_A_Hostage', 5, 1, 'CT', 'Rescue a Hostage', '1', '0', '0', '0'),
+            ('cs2', 'Killed_A_Hostage', -15, 1, 'CT', 'Kill a Hostage', '1', '0', '0', '0'),
+            ('cs2', 'Spawned_With_The_Bomb', 2, 0, 'TERRORIST', 'Spawn with the Bomb', '1', '0', '0', '0'),
+            ('cs2', 'Got_The_Bomb', 2, 0, 'TERRORIST', 'Pick up the Bomb', '1', '0', '0', '0'),
+            ('cs2', 'Dropped_The_Bomb', -2, 0, 'TERRORIST', 'Drop the Bomb', '1', '0', '0', '0'),
+            ('cs2', 'SFUI_Notice_CTs_Win', 0, 2, 'CT', 'All Terrorists eliminated', '0', '0', '1', '0'),
+            ('cs2', 'SFUI_Notice_Terrorists_Win', 0, 2, 'TERRORIST', 'All Counter-Terrorists eliminated', '0', '0', '1', '0'),
+            ('cs2', 'SFUI_Notice_All_Hostages_Rescued', 0, 10, 'CT', 'Counter-Terrorists rescued all the hostages', '0', '0', '1', '0'),
+            ('cs2', 'SFUI_Notice_Target_Bombed', 0, 5, 'TERRORIST', 'Terrorists bombed the target', '0', '0', '1', '0'),
+            ('cs2', 'SFUI_Notice_Bomb_Defused', 0, 5, 'CT', 'Counter-Terrorists defused the bomb', '0', '0', '1', '0'),
+            ('cs2', 'Escaped_As_VIP', 0, 10, 'CT', 'VIP escaped', '0', '0', '1', '0'),
+            ('cs2', 'Assassinated_The_VIP', 0, 6, 'TERRORIST', 'Terrorists assassinated the VIP', '0', '0', '1', '0'),
+            ('cs2', 'Became_VIP', 1, 0, 'CT', 'Become the VIP', '1', '0', '0', '0'),
+            ('cs2', 'headshot', 1, 0, '', 'Headshot', '1', '0', '0', '0'),
+            ('cs2', 'round_mvp', 0, 0, '', 'Round MVP', '1', '0', '0', '0'),
+            ('cs2', 'kill_streak_2', 1, 0, '', 'Double Kill (2 kills)', '1', '0', '0', '0'),
+            ('cs2', 'kill_streak_3', 2, 0, '', 'Triple Kill (3 kills)', '1', '0', '0', '0'),
+            ('cs2', 'kill_streak_4', 3, 0, '', 'Domination (4 kills)', '1', '0', '0', '0'),
+            ('cs2', 'kill_streak_5', 4, 0, '', 'Rampage (5 kills)', '1', '0', '0', '0'),
+            ('cs2', 'kill_streak_6', 5, 0, '', 'Mega Kill (6 kills)', '1', '0', '0', '0'),
+            ('cs2', 'kill_streak_7', 6, 0, '', 'Ownage (7 kills)', '1', '0', '0', '0'),
+            ('cs2', 'kill_streak_8', 7, 0, '', 'Ultra Kill (8 kills)', '1', '0', '0', '0'),
+            ('cs2', 'kill_streak_9', 8, 0, '', 'Killing Spree (9 kills)', '1', '0', '0', '0'),
+            ('cs2', 'kill_streak_10', 9, 0, '', 'Monster Kill (10 kills)', '1', '0', '0', '0'),
+            ('cs2', 'kill_streak_11', 10, 0, '', 'Unstoppable (11 kills)', '1', '0', '0', '0'),
+            ('cs2', 'kill_streak_12', 11, 0, '', 'God Like (12+ kills)', '1', '0', '0', '0'),
+            ('cs2', 'domination', 5, 0, '', 'Domination', '0', '1', '0', '0'),
+            ('cs2', 'revenge', 3, 0, '', 'Revenge', '0', '1', '0', '0');
+    ");
+
+    // 5. Weapons
+    $db->query("
+        INSERT IGNORE INTO `hlstats_Weapons` (`game`, `code`, `name`, `modifier`) VALUES
+            ('cs2', 'ak47', 'Kalashnikov AK-47', 1.00),
+            ('cs2', 'm4a1', 'M4A4', 1.00),
+            ('cs2', 'm4a1_silencer', 'M4A1-S', 1.00),
+            ('cs2', 'awp', 'AWP', 1.00),
+            ('cs2', 'deagle', 'Desert Eagle', 1.20),
+            ('cs2', 'revolver', 'R8 Revolver', 1.20),
+            ('cs2', 'hkp2000', 'P2000', 1.40),
+            ('cs2', 'usp_silencer', 'USP-S', 1.40),
+            ('cs2', 'glock', 'Glock-18', 1.40),
+            ('cs2', 'galilar', 'Galil AR', 1.10),
+            ('cs2', 'galil', 'Galil', 1.10),
+            ('cs2', 'famas', 'FAMAS', 1.10),
+            ('cs2', 'aug', 'AUG', 1.00),
+            ('cs2', 'sg553', 'SG 553', 1.00),
+            ('cs2', 'sg556', 'SG 556', 1.00),
+            ('cs2', 'ssg08', 'SSG 08', 1.10),
+            ('cs2', 'g3sg1', 'G3SG1', 0.80),
+            ('cs2', 'scar20', 'SCAR-20', 0.80),
+            ('cs2', 'p250', 'P250', 1.50),
+            ('cs2', 'fiveseven', 'Five-SeveN', 1.50),
+            ('cs2', 'tec9', 'Tec-9', 1.20),
+            ('cs2', 'cz75a', 'CZ75-Auto', 1.30),
+            ('cs2', 'elite', 'Dual Berettas', 1.40),
+            ('cs2', 'mac10', 'MAC-10', 1.50),
+            ('cs2', 'mp9', 'MP9', 1.40),
+            ('cs2', 'mp7', 'MP7', 1.30),
+            ('cs2', 'mp5sd', 'MP5-SD', 1.20),
+            ('cs2', 'ump45', 'UMP-45', 1.20),
+            ('cs2', 'p90', 'P90', 1.20),
+            ('cs2', 'bizon', 'PP-Bizon', 1.30),
+            ('cs2', 'nova', 'Nova', 1.30),
+            ('cs2', 'xm1014', 'XM1014', 1.10),
+            ('cs2', 'sawedoff', 'Sawed-Off', 1.30),
+            ('cs2', 'mag7', 'MAG-7', 1.30),
+            ('cs2', 'm249', 'M249', 1.00),
+            ('cs2', 'negev', 'Negev', 1.00),
+            ('cs2', 'hegrenade', 'High Explosive Grenade', 1.80),
+            ('cs2', 'inferno', 'Incendiary / Molotov', 1.80),
+            ('cs2', 'decoy', 'Decoy Grenade', 2.00),
+            ('cs2', 'taser', 'Zeus x27', 1.00),
+            ('cs2', 'knife', 'Knife', 2.00),
+            ('cs2', 'knife_t', 'Terrorist Knife', 2.00),
+            ('cs2', 'bayonet', 'Bayonet', 2.00),
+            ('cs2', 'knife_butterfly', 'Butterfly Knife', 2.00),
+            ('cs2', 'knife_falchion', 'Falchion Knife', 2.00),
+            ('cs2', 'knife_flip', 'Flip Knife', 2.00),
+            ('cs2', 'knife_gut', 'Gut Knife', 2.00),
+            ('cs2', 'knife_tactical', 'Huntsman Knife', 2.00),
+            ('cs2', 'knife_karambit', 'Karambit', 2.00),
+            ('cs2', 'knife_m9_bayonet', 'M9 Bayonet', 2.00),
+            ('cs2', 'knife_push', 'Shadow Daggers', 2.00),
+            ('cs2', 'knife_survival_bowie', 'Bowie Knife', 2.00),
+            ('cs2', 'knife_ursus', 'Ursus Knife', 2.00),
+            ('cs2', 'knife_gypsy_jackknife', 'Navaja Knife', 2.00),
+            ('cs2', 'knife_stiletto', 'Stiletto Knife', 2.00),
+            ('cs2', 'knife_widowmaker', 'Talon Knife', 2.00),
+            ('cs2', 'knife_outdoor', 'Nomad Knife', 2.00),
+            ('cs2', 'knife_skeleton', 'Skeleton Knife', 2.00),
+            ('cs2', 'knife_canis', 'Survival Knife', 2.00),
+            ('cs2', 'knife_cord', 'Paracord Knife', 2.00),
+            ('cs2', 'knife_css', 'Classic Knife', 2.00),
+            ('cs2', 'knife_kukri', 'Kukri Knife', 2.00);
+    ");
+
+    // 6. Awards
+    $db->query("
+        INSERT IGNORE INTO `hlstats_Awards` (`awardType`, `game`, `code`, `name`, `verb`) VALUES
+            ('W', 'cs2', 'ak47', 'AK47', 'kills with ak47'),
+            ('W', 'cs2', 'aug', 'AUG', 'kills with aug'),
+            ('W', 'cs2', 'awp', 'AWP', 'kills with awp'),
+            ('W', 'cs2', 'deagle', 'Desert Eagle', 'kills with deagle'),
+            ('W', 'cs2', 'elite', 'Dual Berettas', 'kills with elite'),
+            ('W', 'cs2', 'famas', 'FAMAS', 'kills with famas'),
+            ('W', 'cs2', 'fiveseven', 'Five-SeveN', 'kills with fiveseven'),
+            ('W', 'cs2', 'g3sg1', 'G3SG1', 'kills with g3sg1'),
+            ('W', 'cs2', 'galilar', 'Galil AR', 'kills with galilar'),
+            ('W', 'cs2', 'glock', 'Glock-18', 'kills with glock'),
+            ('W', 'cs2', 'hegrenade', 'High Explosive Grenade', 'kills with grenade'),
+            ('W', 'cs2', 'inferno', 'Incendiary Grenade', 'kills with inferno'),
+            ('W', 'cs2', 'knife', 'Knife Maniac', 'knifings'),
+            ('W', 'cs2', 'm249', 'M249', 'kills with m249'),
+            ('W', 'cs2', 'm4a1', 'M4A4', 'kills with m4a1'),
+            ('W', 'cs2', 'm4a1_silencer', 'M4A1-S', 'kills with m4a1-s'),
+            ('W', 'cs2', 'mac10', 'MAC-10', 'kills with mac10'),
+            ('W', 'cs2', 'mag7', 'MAG-7', 'kills with mag7'),
+            ('O', 'cs2', 'headshot', 'Headshot King', 'shots in the head'),
+            ('W', 'cs2', 'latency', 'Best Latency', 'ms average connection'),
+            ('O', 'cs2', 'round_mvp', 'Most Valuable Player', 'times earning Round MVP'),
+            ('W', 'cs2', 'mostkills', 'Most Kills', 'kills'),
+            ('W', 'cs2', 'suicide', 'Suicides', 'suicides'),
+            ('W', 'cs2', 'teamkills', 'Team Killer', 'team kills'),
+            ('W', 'cs2', 'mp7', 'MP7', 'kills with mp7'),
+            ('W', 'cs2', 'mp9', 'MP9', 'kills with mp9'),
+            ('W', 'cs2', 'mp5sd', 'MP5-SD', 'kills with mp5sd'),
+            ('W', 'cs2', 'negev', 'Negev', 'kills with negev'),
+            ('W', 'cs2', 'nova', 'Nova', 'kills with nova'),
+            ('W', 'cs2', 'hkp2000', 'P2000', 'kills with p2000'),
+            ('W', 'cs2', 'usp_silencer', 'USP-S', 'kills with usp-s'),
+            ('W', 'cs2', 'p250', 'P250', 'kills with p250'),
+            ('W', 'cs2', 'p90', 'P90', 'kills with p90'),
+            ('W', 'cs2', 'bizon', 'PP-Bizon', 'kills with pp-bizon'),
+            ('W', 'cs2', 'sawedoff', 'Sawed-Off', 'kills with sawed-off'),
+            ('W', 'cs2', 'scar20', 'SCAR-20', 'kills with scar-20'),
+            ('W', 'cs2', 'sg553', 'SG 553', 'kills with sg553'),
+            ('W', 'cs2', 'ssg08', 'SSG 08', 'kills with ssg08'),
+            ('W', 'cs2', 'tec9', 'Tec-9', 'kills with tec-9'),
+            ('O', 'cs2', 'Defused_The_Bomb', 'Top Defuser', 'bomb defusions'),
+            ('O', 'cs2', 'Planted_The_Bomb', 'Top Demolitionist', 'bomb plantings'),
+            ('O', 'cs2', 'Killed_A_Hostage', 'Top Hostage Killer', 'hostages killed'),
+            ('O', 'cs2', 'Rescued_A_Hostage', 'Top Hostage Rescuer', 'hostages rescued'),
+            ('W', 'cs2', 'ump45', 'UMP-45', 'kills with ump45'),
+            ('W', 'cs2', 'xm1014', 'XM1014', 'kills with xm1014'),
+            ('W', 'cs2', 'taser', 'Zeus x27', 'kills with taser');
+    ");
+
+    // 7. Ribbons
+    $db->query("
+        INSERT IGNORE INTO `hlstats_Ribbons` (`awardCode`, `awardCount`, `special`, `game`, `image`, `ribbonName`) VALUES
+            ('Defused_The_Bomb', 1, 0, 'cs2', '1_defused_the_bomb.png', 'Award of Bomb Defuser'),
+            ('Planted_The_Bomb', 1, 0, 'cs2', '1_planted_the_bomb.png', 'Award of Bomb Planter'),
+            ('Rescued_A_Hostage', 1, 0, 'cs2', '1_rescued_a_hostage.png', 'Award of Hostage Rescuer'),
+            ('Killed_A_Hostage', 1, 0, 'cs2', '1_killed_a_hostage.png', 'Award of Hostage Killer'),
+            ('latency', 1, 0, 'cs2', '1_latency.png', 'Award of Lowpinger'),
+            ('headshot', 1, 0, 'cs2', '1_headshot.png', 'Award of Headshots'),
+            ('Defused_The_Bomb', 5, 0, 'cs2', '2_defused_the_bomb.png', 'Bronze Bomb Defuser'),
+            ('Planted_The_Bomb', 5, 0, 'cs2', '2_planted_the_bomb.png', 'Bronze Bomb Planter'),
+            ('Rescued_A_Hostage', 5, 0, 'cs2', '2_rescued_a_hostage.png', 'Bronze Hostage Rescuer'),
+            ('Killed_A_Hostage', 5, 0, 'cs2', '2_killed_a_hostage.png', 'Bronze Hostage Killer'),
+            ('latency', 5, 0, 'cs2', '2_latency.png', 'Bronze Lowpinger'),
+            ('headshot', 5, 0, 'cs2', '2_headshot.png', 'Bronze Headshots'),
+            ('Defused_The_Bomb', 12, 0, 'cs2', '3_defused_the_bomb.png', 'Silver Bomb Defuser'),
+            ('Planted_The_Bomb', 12, 0, 'cs2', '3_planted_the_bomb.png', 'Silver Bomb Planter'),
+            ('Rescued_A_Hostage', 12, 0, 'cs2', '3_rescued_a_hostage.png', 'Silver Hostage Rescuer'),
+            ('Killed_A_Hostage', 12, 0, 'cs2', '3_killed_a_hostage.png', 'Silver Hostage Killer'),
+            ('latency', 12, 0, 'cs2', '3_latency.png', 'Silver Lowpinger'),
+            ('headshot', 12, 0, 'cs2', '3_headshot.png', 'Silver Headshots'),
+            ('Defused_The_Bomb', 20, 0, 'cs2', '4_defused_the_bomb.png', 'Gold Bomb Defuser'),
+            ('Planted_The_Bomb', 20, 0, 'cs2', '4_planted_the_bomb.png', 'Gold Bomb Planter'),
+            ('Rescued_A_Hostage', 20, 0, 'cs2', '4_rescued_a_hostage.png', 'Gold Hostage Rescuer'),
+            ('Killed_A_Hostage', 20, 0, 'cs2', '4_killed_a_hostage.png', 'Gold Hostage Killer'),
+            ('latency', 20, 0, 'cs2', '4_latency.png', 'Gold Lowpinger'),
+            ('headshot', 20, 0, 'cs2', '4_headshot.png', 'Gold Headshots'),
+            ('Defused_The_Bomb', 30, 0, 'cs2', '5_defused_the_bomb.png', 'Platinum Bomb Defuser'),
+            ('Planted_The_Bomb', 30, 0, 'cs2', '5_planted_the_bomb.png', 'Platinum Bomb Planter'),
+            ('Rescued_A_Hostage', 30, 0, 'cs2', '5_rescued_a_hostage.png', 'Platinum Hostage Rescuer'),
+            ('Killed_A_Hostage', 30, 0, 'cs2', '5_killed_a_hostage.png', 'Platinum Hostage Killer'),
+            ('latency', 30, 0, 'cs2', '5_latency.png', 'Platinum Lowpinger'),
+            ('headshot', 30, 0, 'cs2', '5_headshot.png', 'Platinum Headshots'),
+            ('Defused_The_Bomb', 50, 0, 'cs2', '6_defused_the_bomb.png', 'Supreme Bomb Defuser'),
+            ('Planted_The_Bomb', 50, 0, 'cs2', '6_planted_the_bomb.png', 'Supreme Bomb Planter'),
+            ('Rescued_A_Hostage', 50, 0, 'cs2', '6_rescued_a_hostage.png', 'Supreme Hostage Rescuer'),
+            ('Killed_A_Hostage', 50, 0, 'cs2', '6_killed_a_hostage.png', 'Supreme Hostage Killer'),
+            ('latency', 50, 0, 'cs2', '6_latency.png', 'Supreme Lowpinger'),
+            ('headshot', 50, 0, 'cs2', '6_headshot.png', 'Supreme Headshots'),
+            ('teamkills', 1, 0, 'cs2', '1_teamkills.png', 'Award of Team Kills'),
+            ('teamkills', 5, 0, 'cs2', '2_teamkills.png', 'Bronze Team Kills'),
+            ('teamkills', 12, 0, 'cs2', '3_teamkills.png', 'Silver Team Kills'),
+            ('teamkills', 20, 0, 'cs2', '4_teamkills.png', 'Gold Team Kills'),
+            ('teamkills', 30, 0, 'cs2', '5_teamkills.png', 'Platinum Team Kills'),
+            ('teamkills', 50, 0, 'cs2', '6_teamkills.png', 'Supreme Team Kills'),
+            ('mostkills', 1, 0, 'cs2', '1_mostkills.png', 'Award of Most Kills'),
+            ('mostkills', 5, 0, 'cs2', '2_mostkills.png', 'Bronze Most Kills'),
+            ('mostkills', 12, 0, 'cs2', '3_mostkills.png', 'Silver Most Kills'),
+            ('mostkills', 20, 0, 'cs2', '4_mostkills.png', 'Gold Most Kills'),
+            ('mostkills', 30, 0, 'cs2', '5_mostkills.png', 'Platinum Most Kills'),
+            ('mostkills', 50, 0, 'cs2', '6_mostkills.png', 'Supreme Most Kills'),
+            ('round_mvp', 1, 0, 'cs2', '1_round_mvp.png', 'Most Valuable Player'),
+            ('round_mvp', 5, 0, 'cs2', '2_round_mvp.png', 'Bronze Most Valuable Player'),
+            ('round_mvp', 12, 0, 'cs2', '3_round_mvp.png', 'Silver Most Valuable Player'),
+            ('round_mvp', 20, 0, 'cs2', '4_round_mvp.png', 'Gold Most Valuable Player'),
+            ('round_mvp', 30, 0, 'cs2', '5_round_mvp.png', 'Platinum Most Valuable Player'),
+            ('round_mvp', 50, 0, 'cs2', '6_round_mvp.png', 'Supreme Most Valuable Player'),
+            ('suicide', 1, 0, 'cs2', '1_suicide.png', 'Award of Most Suicides'),
+            ('suicide', 5, 0, 'cs2', '2_suicide.png', 'Bronze Suicides'),
+            ('suicide', 12, 0, 'cs2', '3_suicide.png', 'Silver Suicides'),
+            ('suicide', 20, 0, 'cs2', '4_suicide.png', 'Gold Suicides'),
+            ('suicide', 30, 0, 'cs2', '5_suicide.png', 'Platinum Suicides'),
+            ('suicide', 50, 0, 'cs2', '6_suicide.png', 'Supreme Suicides');
+    ");
+
+    // 8. Ranks
+    $db->query("
+        INSERT IGNORE INTO `hlstats_Ranks` (`game`, `image`, `minKills`, `maxKills`, `rankName`) VALUES
+            ('cs2', 'recruit', 0, 49, 'Recruit'),
+            ('cs2', 'private', 50, 99, 'Private'),
+            ('cs2', 'private-first-class', 100, 199, 'Private First Class'),
+            ('cs2', 'lance-corporal', 200, 299, 'Lance Corporal'),
+            ('cs2', 'corporal', 300, 399, 'Corporal'),
+            ('cs2', 'sergeant', 400, 499, 'Sergeant'),
+            ('cs2', 'staff-sergeant', 500, 599, 'Staff Sergeant'),
+            ('cs2', 'gunnery-sergeant', 600, 699, 'Gunnery Sergeant'),
+            ('cs2', 'master-sergeant', 700, 799, 'Master Sergeant'),
+            ('cs2', 'first-sergeant', 800, 899, 'First Sergeant'),
+            ('cs2', 'master-chief', 900, 999, 'Master Chief'),
+            ('cs2', 'sergeant-major', 1000, 1199, 'Sergeant Major'),
+            ('cs2', 'ensign', 1200, 1399, 'Ensign'),
+            ('cs2', 'third-lieutenant', 1400, 1599, 'Third Lieutenant'),
+            ('cs2', 'second-lieutenant', 1600, 1799, 'Second Lieutenant'),
+            ('cs2', 'first-lieutenant', 1800, 1999, 'First Lieutenant'),
+            ('cs2', 'captain', 2000, 2249, 'Captain'),
+            ('cs2', 'major', 2250, 2499, 'Major'),
+            ('cs2', 'lieutenant-colonel', 2500, 2749, 'Lieutenant Colonel'),
+            ('cs2', 'colonel', 2750, 2999, 'Colonel'),
+            ('cs2', 'brigadier-general', 3000, 3499, 'Brigadier General'),
+            ('cs2', 'major-general', 3500, 3999, 'Major General'),
+            ('cs2', 'lieutenant-general', 4000, 4499, 'Lieutenant General'),
+            ('cs2', 'general', 4500, 4999, 'General'),
+            ('cs2', 'general-of-the-army', 5000, 0, 'General of the Army');
+    ");
+
+    // Perform database schema update notification
+    print "Updating database and version schema numbers.<br />";
+    $db->query("UPDATE hlstats_Options SET `value` = '$dbversion' WHERE `keyname` = 'dbversion'");
+?>

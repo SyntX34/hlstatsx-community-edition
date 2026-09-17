@@ -16,6 +16,7 @@ a PHP frontend.
 #### :loudspeaker: Important changes
 | Date  | Description | Additional information |
 | ------------- | ------------- | ------------- |
+| 17.09.2026  | Added native Counter-Strike 2 (CS2) support and SwiftlyS2 in-game server plugin | Added `cs2` game code, schema migrations, and SwiftlyS2 plugin in `swiftlys2/HLstatsX` |
 | 07.01.2020  | [#45](https://github.com/NomisCZ/hlstatsx-community-edition/issues/45) GeoIP2 Linux script updated, GeoLite2 MaxMind database (GDPR and CCPA) | https://blog.maxmind.com/2019/12/18/significant-changes-to-accessing-and-using-geolite2-databases/ |
 
 > Date format: DD.MM.YYYY

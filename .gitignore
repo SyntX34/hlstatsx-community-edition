@@ -2,3 +2,9 @@
 /web/.idea
 /.vscode
 /.vagrant
+bin/
+obj/
+swiftlys2/**/bin/
+swiftlys2/**/obj/
+swiftlys2/**/build/
+nul
