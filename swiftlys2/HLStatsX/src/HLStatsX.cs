@@ -487,7 +487,7 @@ public partial class HLStatsX : BasePlugin
                         player.SendMessage(MessageType.Chat, FormatSourceModMessage(player, message));
                 }
             }
-        });
+        }, registerRaw: true);
 
         Core.Command.RegisterCommand("hlx_sm_psay2", (context) =>
         {
@@ -496,7 +496,7 @@ public partial class HLStatsX : BasePlugin
             string message = string.Join(" ", context.Args.Skip(1));
             if (player != null && player.IsValid && !player.IsFakeClient)
                 player.SendMessage(MessageType.Chat, FormatSourceModMessage(player, message));
-        });
+        }, registerRaw: true);
 
         Core.Command.RegisterCommand("hlx_sm_csay", (context) =>
         {
@@ -504,7 +504,7 @@ public partial class HLStatsX : BasePlugin
             string message = string.Join(" ", context.Args);
             foreach (var player in Core.PlayerManager.GetAllValidPlayers().Where(p => !p.IsFakeClient))
                 player.SendMessage(MessageType.Center, message);
-        });
+        }, registerRaw: true);
 
         Core.Command.RegisterCommand("hlx_sm_tsay", (context) =>
         {
@@ -525,7 +525,7 @@ public partial class HLStatsX : BasePlugin
                 if (player != null && player.IsValid && !player.IsFakeClient)
                     player.SendMessage(MessageType.Center, message);
             }
-        });
+        }, registerRaw: true);
 
         Core.Command.RegisterCommand("hlx_sm_hint", (context) =>
         {
@@ -544,7 +544,7 @@ public partial class HLStatsX : BasePlugin
                 if (player != null && player.IsValid && !player.IsFakeClient)
                     player.SendMessage(MessageType.Alert, message);
             }
-        });
+        }, registerRaw: true);
 
         Core.Command.RegisterCommand("hlx_sm_msay", (context) =>
         {
@@ -565,7 +565,7 @@ public partial class HLStatsX : BasePlugin
                 if (player != null && player.IsValid && !player.IsFakeClient)
                     player.SendMessage(MessageType.Chat, formattedMsg);
             }
-        });
+        }, registerRaw: true);
 
         Core.Command.RegisterCommand("hlx_sm_swap", (context) =>
         {
@@ -577,7 +577,7 @@ public partial class HLStatsX : BasePlugin
                 if (teamNum == 2) player.SwitchTeam(Team.CT);
                 else if (teamNum == 3) player.SwitchTeam(Team.T);
             }
-        });
+        }, registerRaw: true);
 
         Core.Command.RegisterCommand("hlx_sm_player_action", (context) =>
         {
@@ -585,42 +585,42 @@ public partial class HLStatsX : BasePlugin
             var player = FindPlayerTarget(context.Args[0]);
             if (player != null && player.IsValid)
                 SendLog(player, context.Args[1], "triggered");
-        });
+        }, registerRaw: true);
 
         Core.Command.RegisterCommand("hlx_sm_team_action", (context) =>
         {
             if (context.Args.Length < 2) return;
             SendLog(null, $"Team \"{context.Args[0]}\" triggered \"{context.Args[1]}\"", null);
-        });
+        }, registerRaw: true);
 
         Core.Command.RegisterCommand("hlx_sm_world_action", (context) =>
         {
             if (context.Args.Length < 1) return;
             SendLog(null, $"World triggered \"{context.Args[0]}\"", null);
-        });
+        }, registerRaw: true);
 
         Core.Command.RegisterCommand("hlx_protect_address", (context) =>
         {
             if (context.Args.Length > 0)
                 _protectAddress = context.Args[0];
-        });
+        }, registerRaw: true);
 
         Core.Command.RegisterCommand("hlx_block_commands", (context) =>
         {
             if (context.Args.Length > 0 && int.TryParse(context.Args[0], out int val))
                 _blockChatCommands = (val == 1);
-        });
+        }, registerRaw: true);
 
         Core.Command.RegisterCommand("hlx_message_prefix", (context) =>
         {
             if (context.Args.Length > 0)
                 _messagePrefix = string.Join(" ", context.Args);
-        });
+        }, registerRaw: true);
 
         Core.Command.RegisterCommand("hlx_message_prefix_clear", (context) =>
         {
             _messagePrefix = "";
-        });
+        }, registerRaw: true);
 
         void RegisterPlayerStatsCommand(string name)
         {
@@ -629,7 +629,7 @@ public partial class HLStatsX : BasePlugin
                 if (!context.IsSentByPlayer || context.Sender is not { } player || !player.IsValid) return;
                 string arg = context.Args.Length > 0 ? " " + string.Join(" ", context.Args) : "";
                 SendLog(player, $"{name}{arg}", "say");
-            });
+            }, registerRaw: true);
         }
 
         RegisterPlayerStatsCommand("rank");
