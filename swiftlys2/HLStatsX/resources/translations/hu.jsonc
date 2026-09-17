@@ -1,0 +1,13 @@
+{
+  "hlx.prefix": "[green][HLstatsX][default] ",
+  "hlx.menu_title": "► HLstatsX:CE Statisztika",
+  "hlx.rank": "[green][HLstatsX][default] [yellow]{0}[default] a(z) [lightred]#{1}[default]. helyen áll a(z) [lightred]{2}[default] közül [lightred]{3}[default] ponttal!",
+  "hlx.rank_hidden": "[green][HLstatsX][default] [yellow]{0}[default] a(z) [grey](REJTETT)[default] helyen áll a(z) [lightred]{1}[default] közül [lightred]{2}[default] ponttal!",
+  "hlx.points_got": "[green][HLstatsX][default] Kaptál [lime]+{0} pontot[default] ({1}) ezért: [yellow]{2}[default]!",
+  "hlx.points_lost": "[green][HLstatsX][default] Elvesztettél [red]-{0} pontot[default] ({1}) ezért: [yellow]{2}[default]!",
+  "hlx.kill_reward": "[green][HLstatsX][default] [yellow]{0}[default] ({1}) kapott [lime]+{2} pontot[default] [yellow]{3}[default] ({4}) megöléséért!",
+  "hlx.session": "[green][HLstatsX][default] [yellow]{0}[default] munkamenet: [lime]{1} ölés[default], [red]{2} halál[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Pontosság: [yellow]{6}[default]%",
+  "hlx.next": "[green][HLstatsX][default] Következő játékos előtted: [yellow]{0}[default] (Rang #{1} {2} ponttal)",
+  "hlx.top10_header": "[green][HLstatsX][default] Top 10 játékos:",
+  "hlx.top10_entry": "[lightred]#{0}[default] [yellow]{1}[default] - [lime]{2} pont[default] (K/D: {3})"
+}

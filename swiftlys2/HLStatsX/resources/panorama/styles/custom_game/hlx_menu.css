@@ -1,0 +1,227 @@
+.HlxMenuRoot {
+    width: 100%;
+    height: 100%;
+    flow-children: none;
+}
+
+.HlxMenuPanel {
+    width: fit-children;
+    min-width: 290px;
+    max-width: 440px;
+    height: fit-children;
+
+    flow-children: down;
+
+    padding: 14px 18px;
+    margin-left: 36px;
+    margin-top: 0px;
+
+    background-color: rgba(14, 16, 22, 0.88);
+    box-shadow: 0px 8px 24px rgba(0, 0, 0, 0.65);
+    border: 1px solid rgba(255, 184, 77, 0.45);
+    border-radius: 6px;
+
+    visibility: collapse;
+    opacity: 0;
+
+    transition-property: opacity, background-color, box-shadow, border-color;
+    transition-duration: 0.16s, 0.16s, 0.16s, 0.16s;
+    transition-timing-function: ease-in-out;
+}
+
+.HlxMenuPanel.Visible {
+    visibility: visible;
+    opacity: 1;
+}
+
+.HlxMenuPanel.MiddleLeft {
+    horizontal-align: left;
+    vertical-align: center;
+}
+
+.HlxMenuPanel.Center {
+    horizontal-align: center;
+    vertical-align: center;
+    margin-left: 0px;
+}
+
+.HlxMenuPanel.TopRight {
+    horizontal-align: right;
+    vertical-align: top;
+    margin-right: 20px;
+    margin-top: 120px;
+}
+
+.HlxMenuTitle {
+    width: fit-children;
+    height: 28px;
+
+    font-family: Stratum2 Bold, 'Arial Unicode MS', Tahoma, sans-serif;
+    font-size: 22px;
+    font-weight: bold;
+
+    color: #ffb84d;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255, 184, 77, 0.35);
+
+    opacity: 1;
+}
+
+.HlxMenuOptions {
+    width: fit-children;
+    height: fit-children;
+    max-height: 380px;
+    overflow: squish scroll;
+    flow-children: down;
+}
+
+.HlxMenuOption {
+    width: fit-children;
+    height: 28px;
+
+    padding: 2px 8px;
+    border: 0px solid transparent;
+    border-radius: 4px;
+    background-color: rgba(0, 0, 0, 0);
+    hittest: false;
+
+    font-family: Stratum2 Bold, 'Arial Unicode MS', Tahoma, sans-serif;
+    font-size: 20px;
+    font-weight: bold;
+
+    color: #f2f7fb;
+    opacity: 1;
+
+    transition-property: color, opacity, background-color, transform;
+    transition-duration: 0.08s, 0.12s, 0.08s, 0.08s;
+    transition-timing-function: ease-in-out;
+}
+
+.HlxMenuOption Label {
+    width: fit-children;
+    height: 28px;
+    hittest: false;
+    text-overflow: shrink;
+}
+
+.HlxMenuOption.Disabled {
+    color: #717e8c;
+    opacity: 0.75;
+}
+
+.HlxMenuOption.Spacer {
+    color: #cbd5e1;
+    font-size: 18px;
+    margin: 2px 0px;
+}
+
+.HlxMenuOption.Selected,
+.HlxMenuOption.Hovered {
+    color: #ffffff;
+    background-color: rgba(255, 184, 77, 0.35);
+    transform: translateX(4px);
+}
+
+.HlxMenuFooter {
+    width: fit-children;
+    height: fit-children;
+
+    flow-children: down;
+
+    margin-top: 12px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.HlxMenuFooterOption {
+    width: fit-children;
+    height: 26px;
+
+    padding: 2px 8px;
+    border: 0px solid transparent;
+    border-radius: 4px;
+    background-color: rgba(0, 0, 0, 0);
+    hittest: false;
+
+    font-family: Stratum2 Bold, 'Arial Unicode MS', Tahoma, sans-serif;
+    font-size: 19px;
+    font-weight: bold;
+
+    color: #639dff;
+    opacity: 1;
+
+    transition-property: color, opacity, background-color, transform;
+    transition-duration: 0.08s, 0.12s, 0.08s, 0.08s;
+    transition-timing-function: ease-in-out;
+}
+
+.HlxMenuFooterOption Label {
+    width: fit-children;
+    height: 26px;
+    hittest: false;
+    text-overflow: shrink;
+}
+
+#HlxMenuExit {
+    color: #ff5252;
+}
+
+.HlxMenuFooterOption.Disabled {
+    color: #717e8c;
+    opacity: 0.75;
+}
+
+.HlxMenuFooterOption.Selected,
+.HlxMenuFooterOption.Hovered {
+    color: #ffffff;
+    background-color: rgba(99, 157, 255, 0.35);
+    transform: translateX(4px);
+}
+
+#HlxMenuExit.Selected,
+#HlxMenuExit.Hovered {
+    background-color: rgba(255, 82, 82, 0.35);
+    transform: translateX(4px);
+}
+
+.HlxMenuControls {
+    width: 100%;
+    height: 24px;
+    flow-children: right;
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 184, 77, 0.3);
+}
+
+.HlxMenuControlGroup {
+    width: fit-children;
+    height: 18px;
+    flow-children: right;
+    margin-right: 14px;
+}
+
+.HlxMenuControlGroup.Last {
+    margin-right: 0;
+}
+
+.HlxMenuControlKey {
+    margin-right: 4px;
+    font-family: Stratum2 Bold, 'Arial Unicode MS', Tahoma, sans-serif;
+    font-size: 13px;
+    font-weight: bold;
+    color: #ffb84d;
+}
+
+.HlxMenuControlAction {
+    font-family: Stratum2 Bold, 'Arial Unicode MS', Tahoma, sans-serif;
+    font-size: 13px;
+    font-weight: bold;
+    color: #d2c5a9;
+}
+
+.Hidden {
+    visibility: collapse;
+}

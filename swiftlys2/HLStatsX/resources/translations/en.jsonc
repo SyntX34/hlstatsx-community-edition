@@ -1,3 +1,13 @@
 {
-  "hello": "world"
+  "hlx.prefix": "[green][HLstatsX][default] ",
+  "hlx.menu_title": "► HLstatsX:CE Stats",
+  "hlx.rank": "[green][HLstatsX][default] [yellow]{0}[default] is on rank [lightred]#{1}[default] of [lightred]{2}[default] with [lightred]{3}[default] points!",
+  "hlx.rank_hidden": "[green][HLstatsX][default] [yellow]{0}[default] is on rank [grey](HIDDEN)[default] of [lightred]{1}[default] with [lightred]{2}[default] points!",
+  "hlx.points_got": "[green][HLstatsX][default] You [lime]got +{0} points[default] ({1}) for [yellow]{2}[default]!",
+  "hlx.points_lost": "[green][HLstatsX][default] You [red]lost -{0} points[default] ({1}) for [yellow]{2}[default]!",
+  "hlx.kill_reward": "[green][HLstatsX][default] [yellow]{0}[default] ({1}) got [lime]+{2} points[default] for killing [yellow]{3}[default] ({4})!",
+  "hlx.session": "[green][HLstatsX][default] [yellow]{0}[default] session: [lime]{1} kills[default], [red]{2} deaths[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Acc: [yellow]{6}[default]%",
+  "hlx.next": "[green][HLstatsX][default] Next ranked above you: [yellow]{0}[default] (Rank #{1} with {2} points)",
+  "hlx.top10_header": "[green][HLstatsX][default] Top 10 Players:",
+  "hlx.top10_entry": "[lightred]#{0}[default] [yellow]{1}[default] - [lime]{2} pts[default] (K/D: {3})"
 }

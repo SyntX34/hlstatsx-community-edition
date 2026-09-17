@@ -1,0 +1,38 @@
+<root>
+    <styles>
+        <include src="s2r://panorama/styles/custom_game/hlx_menu.vcss_c" />
+    </styles>
+    <Panel class="HlxMenuRoot">
+        <Panel id="HlxMenuPanel" class="HlxMenuPanel MiddleLeft">
+            <Label id="HlxMenuTitle" class="HlxMenuTitle" text="{s:menu_title}" />
+            <Panel id="HlxMenuOptions" class="HlxMenuOptions">
+                <Button id="HlxMenuOption01" class="HlxMenuOption"><Label id="HlxMenuOption01Label" text="{s:option_01}" /></Button>
+                <Button id="HlxMenuOption02" class="HlxMenuOption"><Label id="HlxMenuOption02Label" text="{s:option_02}" /></Button>
+                <Button id="HlxMenuOption03" class="HlxMenuOption"><Label id="HlxMenuOption03Label" text="{s:option_03}" /></Button>
+                <Button id="HlxMenuOption04" class="HlxMenuOption"><Label id="HlxMenuOption04Label" text="{s:option_04}" /></Button>
+                <Button id="HlxMenuOption05" class="HlxMenuOption"><Label id="HlxMenuOption05Label" text="{s:option_05}" /></Button>
+                <Button id="HlxMenuOption06" class="HlxMenuOption"><Label id="HlxMenuOption06Label" text="{s:option_06}" /></Button>
+                <Button id="HlxMenuOption07" class="HlxMenuOption"><Label id="HlxMenuOption07Label" text="{s:option_07}" /></Button>
+            </Panel>
+            <Panel id="HlxMenuFooter" class="HlxMenuFooter">
+                <Button id="HlxMenuBack" class="HlxMenuFooterOption"><Label id="HlxMenuBackLabel" text="{s:back_text}" /></Button>
+                <Button id="HlxMenuNext" class="HlxMenuFooterOption"><Label id="HlxMenuNextLabel" text="{s:next_text}" /></Button>
+                <Button id="HlxMenuExit" class="HlxMenuFooterOption"><Label id="HlxMenuExitLabel" text="{s:exit_text}" /></Button>
+            </Panel>
+            <Panel id="HlxMenuControls" class="HlxMenuControls Hidden">
+                <Panel class="HlxMenuControlGroup">
+                    <Label id="HlxMenuNavigateKeys" class="HlxMenuControlKey" text="{s:navigate_keys}" />
+                    <Label id="HlxMenuNavigateText" class="HlxMenuControlAction" text="{s:navigate_text}" />
+                </Panel>
+                <Panel class="HlxMenuControlGroup">
+                    <Label id="HlxMenuSelectKey" class="HlxMenuControlKey" text="{s:select_key}" />
+                    <Label id="HlxMenuSelectText" class="HlxMenuControlAction" text="{s:select_text}" />
+                </Panel>
+                <Panel id="HlxMenuExitControl" class="HlxMenuControlGroup Last">
+                    <Label id="HlxMenuExitKey" class="HlxMenuControlKey" text="{s:exit_key}" />
+                    <Label id="HlxMenuExitText" class="HlxMenuControlAction" text="{s:controls_exit_text}" />
+                </Panel>
+            </Panel>
+        </Panel>
+    </Panel>
+</root>

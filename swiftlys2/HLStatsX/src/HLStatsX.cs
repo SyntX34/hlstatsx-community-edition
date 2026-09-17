@@ -6,6 +6,7 @@ using System.Text;
 using System.Runtime.InteropServices;
 using SwiftlyS2.Shared;
 using SwiftlyS2.Shared.Commands;
+using SwiftlyS2.Shared.Events;
 using SwiftlyS2.Shared.GameEvents;
 using SwiftlyS2.Shared.GameEventDefinitions;
 using SwiftlyS2.Shared.Menus;
@@ -18,7 +19,7 @@ namespace HLStatsX;
 
 [PluginMetadata(
     Id = "HLStatsX",
-    Version = "1.1.0",
+    Version = "1.1.1",
     Name = "HLStatsX:CE Ingame Plugin (SwiftlyS2)",
     Author = "SyntX34",
     Description = "Provides CS2 in-game interaction and messaging with HLstatsX:CE daemon"
@@ -140,15 +141,22 @@ public partial class HLStatsX : BasePlugin
         public int ServerPort { get; set; } = 27015;
         public string ProxyKey { get; set; } = "";
         public int MaxPlayers { get; set; } = 32;
+        public int ReceiverPort { get; set; } = 27015;
+        public string MenuType { get; set; } = "CustomHud";
+        public string CustomMenuLayout { get; set; } = "resources/panorama/layout/custom_game/hlx_menu.xml";
     }
 
     private HLStatsXConfig _config = new();
     private static readonly Dictionary<ulong, Dictionary<string, WeaponStats>> _Statsme = new();
     private static readonly Dictionary<ulong, Dictionary<string, HitgroupStats>> _Statsme2 = new();
+    private readonly Dictionary<int, CCSCustomHudLayout> _playerHuds = new();
+    private readonly HashSet<int> _activeHudPlayers = new();
     private string _protectAddress = "";
     private bool _blockChatCommands = true;
     private string _messagePrefix = "";
     private UdpClient? _udpClient;
+    private UdpClient? _udpReceiver;
+    private System.Threading.CancellationTokenSource? _udpCts;
 
     public HLStatsX(ISwiftlyCore core) : base(core)
     {
@@ -230,6 +238,9 @@ public partial class HLStatsX : BasePlugin
                     else if (key.Equals("ServerPort", StringComparison.OrdinalIgnoreCase) && int.TryParse(val, out int sp)) _config.ServerPort = sp;
                     else if (key.Equals("ProxyKey", StringComparison.OrdinalIgnoreCase)) _config.ProxyKey = val;
                     else if (key.Equals("MaxPlayers", StringComparison.OrdinalIgnoreCase) && int.TryParse(val, out int mp)) _config.MaxPlayers = mp;
+                    else if (key.Equals("ReceiverPort", StringComparison.OrdinalIgnoreCase) && int.TryParse(val, out int rp)) _config.ReceiverPort = rp;
+                    else if (key.Equals("MenuType", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(val)) _config.MenuType = val;
+                    else if (key.Equals("CustomMenuLayout", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(val)) _config.CustomMenuLayout = val;
                 }
             }
             else
@@ -243,6 +254,7 @@ public partial class HLStatsX : BasePlugin
         }
 
         _udpClient = new UdpClient();
+        StartUdpReceiver();
         RegisterServerCommands();
         RegisterGameEvents();
         SendUdpLog($"server_cvar: \"maxplayers\" \"{_config.MaxPlayers}\"");
@@ -253,14 +265,136 @@ public partial class HLStatsX : BasePlugin
             if (team != "Unassigned")
                 SendLog(player, team, "joined team");
         }
-        Console.WriteLine($"[HLstatsX:CE] Loaded. Sending logs to {_config.DaemonHost}:{_config.DaemonPort} (Server: {_config.ServerIp}:{_config.ServerPort}, ProxyKey: {_config.ProxyKey}, MaxPlayers: {_config.MaxPlayers})");
+        Console.WriteLine($"[HLstatsX:CE] Loaded. Sending logs to {_config.DaemonHost}:{_config.DaemonPort} (Server: {_config.ServerIp}:{_config.ServerPort}, ProxyKey: {_config.ProxyKey}, MaxPlayers: {_config.MaxPlayers}, ReceiverPort: {_config.ReceiverPort})");
     }
 
     public override void Unload()
     {
+        try
+        {
+            _udpCts?.Cancel();
+            _udpCts?.Dispose();
+            _udpCts = null;
+        }
+        catch {}
+
+        try
+        {
+            _udpReceiver?.Close();
+            _udpReceiver?.Dispose();
+            _udpReceiver = null;
+        }
+        catch {}
+
+        CloseAllCustomHuds();
         _udpClient?.Close();
         _udpClient = null;
         Console.WriteLine("[HLstatsX:CE] Unloaded.");
+    }
+
+    private void StartUdpReceiver()
+    {
+        try
+        {
+            _udpCts = new System.Threading.CancellationTokenSource();
+            _udpReceiver = new UdpClient(_config.ReceiverPort);
+            var token = _udpCts.Token;
+
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    try
+                    {
+                        var res = await _udpReceiver.ReceiveAsync(token);
+                        var raw = Encoding.UTF8.GetString(res.Buffer).Trim();
+                        if (string.IsNullOrEmpty(raw)) continue;
+
+                        if (raw.StartsWith("HLX_CMD ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var cmd = raw.Substring(8).Trim();
+                            if (!string.IsNullOrEmpty(cmd))
+                            {
+                                Core.Scheduler.NextTick(() =>
+                                {
+                                    ExecuteDaemonCommand(cmd);
+                                });
+                            }
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[HLstatsX:CE] UDP receive warning: {ex.Message}");
+                    }
+                }
+            }, token);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HLstatsX:CE] Could not bind UDP receiver on port {_config.ReceiverPort}: {ex.Message}");
+        }
+    }
+
+    private void ExecuteDaemonCommand(string rawCmd)
+    {
+        try
+        {
+            if (rawCmd.StartsWith("hlx_sm_msay ", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = rawCmd.Substring(12).Trim().Split(' ', 3);
+                if (parts.Length >= 3)
+                {
+                    string target = parts[0];
+                    string text = parts[2].Trim('"', '\'').Replace("\\n", "\n").Replace("\r\n", "\n");
+                    var player = FindPlayerTarget(target);
+                    if (player != null && player.IsValid && !player.IsFakeClient)
+                    {
+                        player.SendMessage(MessageType.Chat, FormatColors($"{_messagePrefix}{text}"));
+                    }
+                    else if (target.Equals("0") || target.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+                    {
+                        foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
+                            p.SendMessage(MessageType.Chat, FormatColors($"{_messagePrefix}{text}"));
+                    }
+                    return;
+                }
+            }
+
+            if (rawCmd.StartsWith("hlx_sm_psay ", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = rawCmd.Substring(12).Trim().Split(' ', 3);
+                if (parts.Length >= 2)
+                {
+                    string target = parts[0];
+                    string text = (parts.Length >= 3 ? parts[2] : parts[1]).Trim('"', '\'');
+                    var player = FindPlayerTarget(target);
+                    if (player != null && player.IsValid && !player.IsFakeClient)
+                    {
+                        player.SendMessage(MessageType.Chat, FormatColors($"{_messagePrefix}{text}"));
+                    }
+                    else if (target.Equals("0") || target.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+                    {
+                        foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
+                            p.SendMessage(MessageType.Chat, FormatColors($"{_messagePrefix}{text}"));
+                    }
+                    return;
+                }
+            }
+
+            Core.Engine.ExecuteCommand(rawCmd);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HLstatsX:CE] ExecuteDaemonCommand error: {ex.Message}");
+        }
     }
 
     private void SendUdpLog(string logLine)
@@ -609,6 +743,39 @@ public partial class HLStatsX : BasePlugin
         {
             _messagePrefix = "";
         });
+
+        void RegisterPlayerStatsCommand(string name)
+        {
+            Core.Command.RegisterCommand(name, (context) =>
+            {
+                if (!context.IsSentByPlayer || context.Sender is not { } player || !player.IsValid) return;
+                string arg = context.Args.Length > 0 ? " " + string.Join(" ", context.Args) : "";
+                SendLog(player, $"{name}{arg}", "say");
+            });
+        }
+
+        RegisterPlayerStatsCommand("rank");
+        RegisterPlayerStatsCommand("skill");
+        RegisterPlayerStatsCommand("points");
+        RegisterPlayerStatsCommand("place");
+        RegisterPlayerStatsCommand("top10");
+        RegisterPlayerStatsCommand("top20");
+        RegisterPlayerStatsCommand("top5");
+        RegisterPlayerStatsCommand("statsme");
+        RegisterPlayerStatsCommand("session");
+        RegisterPlayerStatsCommand("session_data");
+        RegisterPlayerStatsCommand("next");
+        RegisterPlayerStatsCommand("kpd");
+        RegisterPlayerStatsCommand("kdratio");
+        RegisterPlayerStatsCommand("kdeath");
+        RegisterPlayerStatsCommand("weapons");
+        RegisterPlayerStatsCommand("accuracy");
+        RegisterPlayerStatsCommand("targets");
+        RegisterPlayerStatsCommand("kills");
+        RegisterPlayerStatsCommand("servers");
+        RegisterPlayerStatsCommand("hlx");
+        RegisterPlayerStatsCommand("hlstatsx");
+        RegisterPlayerStatsCommand("menu");
     }
 
     private void RegisterGameEvents()
@@ -935,11 +1102,13 @@ public partial class HLStatsX : BasePlugin
                 _  => "Disconnected"
             };
             SendUdpLog($"\"{name}<{userid}><{steam3}><{team}>\" disconnected (reason \"{reason}\")");
+            CloseCustomHud(player.PlayerID);
             return HookResult.Continue;
         });
 
         Core.Event.OnMapLoad += (@event) =>
         {
+            CloseAllCustomHuds();
             var mapName = @event.MapName ?? "";
             SendUdpLog($"server_cvar: \"maxplayers\" \"{_config.MaxPlayers}\"");
             SendUdpLog($"Loading map \"{mapName}\"");
@@ -1063,6 +1232,8 @@ public partial class HLStatsX : BasePlugin
             }
             return HookResult.Continue;
         });
+
+        Core.Event.OnCustomHudClicked += HandleCustomHudClick;
     }
 
     private static string FormatColors(string input)
@@ -1104,7 +1275,190 @@ public partial class HLStatsX : BasePlugin
             .Replace("{GOLD}",        "\x10", StringComparison.OrdinalIgnoreCase);
     }
 
+    private void CloseAllCustomHuds()
+    {
+        try
+        {
+            foreach (var kvp in _playerHuds)
+            {
+                var playerId = kvp.Key;
+                var hud = kvp.Value;
+                if (hud != null && hud.IsValid)
+                {
+                    hud.SetInputCaptureEnabledForPlayer(playerId, false);
+                    SetHudClass(hud, "HlxMenuPanel", "Visible", false);
+                    hud.Despawn();
+                }
+            }
+            _playerHuds.Clear();
+            _activeHudPlayers.Clear();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HLstatsX:CE] CloseAllCustomHuds error: {ex.Message}");
+        }
+    }
+
+    private void CloseCustomHud(int playerId)
+    {
+        try
+        {
+            _activeHudPlayers.Remove(playerId);
+            if (_playerHuds.TryGetValue(playerId, out var hud))
+            {
+                if (hud != null && hud.IsValid)
+                {
+                    hud.SetInputCaptureEnabledForPlayer(playerId, false);
+                    SetHudClass(hud, "HlxMenuPanel", "Visible", false);
+                    hud.Despawn();
+                }
+                _playerHuds.Remove(playerId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HLstatsX:CE] CloseCustomHud error: {ex.Message}");
+        }
+    }
+
+    private static void SetHudClass(CCSCustomHudLayout hud, string panelId, string className, bool hasClass)
+    {
+        hud.SetHasClass(panelId, className, hasClass
+            ? EHudPanelClassStatus_t.k_eHudPanelClassStatus_HasClass
+            : EHudPanelClassStatus_t.k_eHudPanelClassStatus_DoesNotHaveClass);
+    }
+
     private void OpenStatsMenu(IPlayer player)
+    {
+        if (player == null || !player.IsValid) return;
+
+        if (_config.MenuType.Equals("CustomHud", StringComparison.OrdinalIgnoreCase))
+        {
+            OpenCustomHudMenu(player);
+            return;
+        }
+
+        OpenBuiltinMenu(player);
+    }
+
+    private void OpenCustomHudMenu(IPlayer player)
+    {
+        try
+        {
+            int playerId = player.PlayerID;
+            CCSCustomHudLayout hud;
+
+            if (_playerHuds.TryGetValue(playerId, out var existingHud) && existingHud != null && existingHud.IsValid)
+            {
+                hud = existingHud;
+            }
+            else
+            {
+                hud = Core.EntitySystem.CreateEntity<CCSCustomHudLayout>();
+                hud.StrLayout = _config.CustomMenuLayout;
+                hud.StrLayoutUpdated();
+                hud.DispatchSpawn();
+
+                hud.SetTransmitState(false);
+                hud.SetTransmitState(true, playerId);
+                _playerHuds[playerId] = hud;
+            }
+
+            var loc = Core.Translation.GetPlayerLocalizer(player);
+            string title = loc["hlx.menu_title"] ?? "► HLstatsX:CE Stats";
+
+            hud.SetDialogVariableString("HlxMenuTitle", "menu_title", title);
+            hud.SetDialogVariableString("HlxMenuOption01Label", "option_01", "1. My Rank");
+            hud.SetDialogVariableString("HlxMenuOption02Label", "option_02", "2. Top 10");
+            hud.SetDialogVariableString("HlxMenuOption03Label", "option_03", "3. Top 20");
+            hud.SetDialogVariableString("HlxMenuOption04Label", "option_04", "4. Next Above Me");
+            hud.SetDialogVariableString("HlxMenuOption05Label", "option_05", "5. My Session");
+            hud.SetDialogVariableString("HlxMenuOption06Label", "option_06", "6. My Stats");
+            hud.SetDialogVariableString("HlxMenuOption07Label", "option_07", "7. Weapon Stats");
+
+            hud.SetDialogVariableString("HlxMenuBackLabel", "back_text", "7. Back");
+            hud.SetDialogVariableString("HlxMenuNextLabel", "next_text", "8. Next");
+            hud.SetDialogVariableString("HlxMenuExitLabel", "exit_text", "9. Exit");
+
+            SetHudClass(hud, "HlxMenuBack", "Hidden", true);
+            SetHudClass(hud, "HlxMenuNext", "Hidden", true);
+            SetHudClass(hud, "HlxMenuExit", "Hidden", false);
+
+            SetHudClass(hud, "HlxMenuOption01", "Interactive", true);
+            SetHudClass(hud, "HlxMenuOption02", "Interactive", true);
+            SetHudClass(hud, "HlxMenuOption03", "Interactive", true);
+            SetHudClass(hud, "HlxMenuOption04", "Interactive", true);
+            SetHudClass(hud, "HlxMenuOption05", "Interactive", true);
+            SetHudClass(hud, "HlxMenuOption06", "Interactive", true);
+            SetHudClass(hud, "HlxMenuOption07", "Interactive", true);
+            SetHudClass(hud, "HlxMenuExit", "Interactive", true);
+
+            hud.SetInputCaptureEnabledForPlayer(playerId, true);
+            SetHudClass(hud, "HlxMenuPanel", "Visible", true);
+            _activeHudPlayers.Add(playerId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HLstatsX:CE] CustomHud menu error: {ex.Message}. Falling back to BuiltIn menu.");
+            OpenBuiltinMenu(player);
+        }
+    }
+
+    private void HandleCustomHudClick(IOnCustomHudClickedEvent @event)
+    {
+        try
+        {
+            int playerId = @event.PlayerId;
+            if (!_activeHudPlayers.Contains(playerId)) return;
+            if (!_playerHuds.TryGetValue(playerId, out var hud) || hud == null || !hud.IsValid) return;
+
+            var player = Core.PlayerManager.GetPlayer(playerId);
+            if (player == null || !player.IsValid) return;
+
+            string button = @event.ButtonId ?? "";
+
+            switch (button)
+            {
+                case "HlxMenuOption01":
+                    CloseCustomHud(playerId);
+                    SendLog(player, "rank", "say");
+                    break;
+                case "HlxMenuOption02":
+                    CloseCustomHud(playerId);
+                    SendLog(player, "top10", "say");
+                    break;
+                case "HlxMenuOption03":
+                    CloseCustomHud(playerId);
+                    SendLog(player, "top20", "say");
+                    break;
+                case "HlxMenuOption04":
+                    CloseCustomHud(playerId);
+                    SendLog(player, "next", "say");
+                    break;
+                case "HlxMenuOption05":
+                    CloseCustomHud(playerId);
+                    SendLog(player, "session", "say");
+                    break;
+                case "HlxMenuOption06":
+                    CloseCustomHud(playerId);
+                    SendLog(player, "statsme", "say");
+                    break;
+                case "HlxMenuOption07":
+                    CloseCustomHud(playerId);
+                    SendLog(player, "weapons", "say");
+                    break;
+                case "HlxMenuExit":
+                    CloseCustomHud(playerId);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HLstatsX:CE] HandleCustomHudClick error: {ex.Message}");
+        }
+    }
+
+    private void OpenBuiltinMenu(IPlayer player)
     {
         try
         {
@@ -1134,6 +1488,7 @@ public partial class HLStatsX : BasePlugin
         }
     }
 
+#pragma warning disable CS0067
     internal sealed class HlxMenuOption : IMenuOption, IDisposable
     {
         private readonly string    _label;
@@ -1188,4 +1543,5 @@ public partial class HLStatsX : BasePlugin
 
         public void Dispose() { }
     }
+#pragma warning restore CS0067
 }

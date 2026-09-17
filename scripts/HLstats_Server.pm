@@ -414,6 +414,29 @@ sub dorcon
 {
 	my ($self, $command)      = @_;
     my $result;
+
+	if ($self->{mod} eq "SWIFTLYS2" || $self->{play_game} == CS2()) {
+		$command =~ s/;//g;
+		&::printNotice("SWIFTLYS2_UDP", $command, 1);
+		my $target_ip = $self->{address};
+		my $target_port = $self->{port};
+		if ($target_ip ne "" && $target_port > 0) {
+			eval {
+				my $udp_sock = IO::Socket::INET->new(
+					Proto    => 'udp',
+					PeerAddr => $target_ip,
+					PeerPort => $target_port
+				);
+				if ($udp_sock) {
+					my $payload = "HLX_CMD " . $command;
+					$udp_sock->send($payload);
+					$udp_sock->close();
+				}
+			};
+		}
+		return 1;
+	}
+
     my $rcon_obj = $self->{rcon_obj};
 	if (($rcon_obj) && ($::g_rcon == 1) && ($self->{rcon} ne "")) {
 	 
@@ -432,6 +455,14 @@ sub dorcon_multi
 {
 	my ($self, @commands)      = @_;
     my $result;
+
+	if ($self->{mod} eq "SWIFTLYS2" || $self->{play_game} == CS2()) {
+		foreach my $cmd (@commands) {
+			$self->dorcon($cmd);
+		}
+		return 1;
+	}
+
     my $rcon_obj = $self->{rcon_obj};
 	if (($rcon_obj) && ($::g_rcon == 1) && ($self->{rcon} ne "")) {
 		if ($self->{game_engine} > 1)

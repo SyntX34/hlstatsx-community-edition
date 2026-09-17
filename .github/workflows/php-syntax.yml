@@ -1,0 +1,52 @@
+name: PHP Syntax Check
+
+on:
+  push:
+    paths:
+      - 'web/**'
+      - '.github/workflows/php-syntax.yml'
+  pull_request:
+    paths:
+      - 'web/**'
+      - '.github/workflows/php-syntax.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: php-syntax-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  php-lint:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        php-version: ['8.1', '8.2', '8.3']
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          coverage: none
+
+      - name: Check PHP Syntax
+        run: |
+          echo "Scanning PHP files for syntax errors under web/..."
+          ERRORS=0
+          while IFS= read -r -d '' file; do
+            if ! php -l "$file" > /dev/null 2>&1; then
+              php -l "$file"
+              ERRORS=$((ERRORS + 1))
+            fi
+          done < <(find web -type f -name "*.php" -print0)
+
+          if [ $ERRORS -gt 0 ]; then
+            echo "::error::Found $ERRORS PHP syntax errors."
+            exit 1
+          fi
+
+          echo "All PHP files passed syntax check on PHP ${{ matrix.php-version }}!"
