@@ -246,6 +246,13 @@ public partial class HLStatsX : BasePlugin
         RegisterServerCommands();
         RegisterGameEvents();
         SendUdpLog($"server_cvar: \"maxplayers\" \"{_config.MaxPlayers}\"");
+        foreach (var player in Core.PlayerManager.GetAllValidPlayers())
+        {
+            SendPlayerConnectLogs(player);
+            var team = GetTeamName(player);
+            if (team != "Unassigned")
+                SendLog(player, team, "joined team");
+        }
         Console.WriteLine($"[HLstatsX:CE] Loaded. Sending logs to {_config.DaemonHost}:{_config.DaemonPort} (Server: {_config.ServerIp}:{_config.ServerPort}, ProxyKey: {_config.ProxyKey}, MaxPlayers: {_config.MaxPlayers})");
     }
 
@@ -297,6 +304,26 @@ public partial class HLStatsX : BasePlugin
             };
         }
         return "Unassigned";
+    }
+
+    private static string CleanIp(string? rawIp)
+    {
+        if (string.IsNullOrWhiteSpace(rawIp) || rawIp.Equals("none", StringComparison.OrdinalIgnoreCase)) return "none";
+        int colonIdx = rawIp.IndexOf(':');
+        if (colonIdx > 0) return rawIp.Substring(0, colonIdx);
+        return rawIp;
+    }
+
+    private void SendPlayerConnectLogs(IPlayer player)
+    {
+        if (player == null || !player.IsValid) return;
+        var name = player.Name.Replace('"', '\'');
+        var userid = player.UserID;
+        var steam3 = GetSteamId3(player.SteamID);
+        var ip = CleanIp(player.IPAddress);
+        SendUdpLog($"\"{name}<{userid}><{steam3}><>\" connected, address \"{ip}\"");
+        SendUdpLog($"\"{name}<{userid}><{steam3}><>\" STEAM USERID validated");
+        SendUdpLog($"\"{name}<{userid}><{steam3}><>\" entered the game");
     }
 
     private static string FormatPlayerString(IPlayer player)
@@ -880,11 +907,15 @@ public partial class HLStatsX : BasePlugin
         {
             var player = @event.UserIdPlayer;
             if (player == null || !player.IsValid) return HookResult.Continue;
-            var name   = player.Name.Replace('"', '\'');
-            var userid = player.UserID;
-            var steam3 = GetSteamId3(player.SteamID);
-            var address = player.IPAddress ?? "none";
-            SendUdpLog($"\"{name}<{userid}><{steam3}><>\" connected, address \"{address}\"");
+            SendPlayerConnectLogs(player);
+            return HookResult.Continue;
+        });
+
+        Core.GameEvent.HookPost<EventPlayerConnectFull>((@event) =>
+        {
+            var player = @event.UserIdPlayer;
+            if (player == null || !player.IsValid) return HookResult.Continue;
+            SendPlayerConnectLogs(player);
             return HookResult.Continue;
         });
 
@@ -950,8 +981,8 @@ public partial class HLStatsX : BasePlugin
                     7 => "right leg",
                     _ => "generic"
                 };
-                int remainHealth = @event.Health;
-                int remainArmor = @event.Armor;
+                int remainHealth = @event.ActualHealth;
+                int remainArmor = @event.ActualArmor;
                 SendUdpLog($"{FormatPlayerString(attacker)} attacked {FormatPlayerString(victim)} with \"{wCode}\" (damage \"{@event.ActualDmgHealth}\") (damage_armor \"{@event.ActualDmgArmor}\") (health \"{remainHealth}\") (armor \"{remainArmor}\") (hitgroup \"{hitgroupName}\")");
             }
 
