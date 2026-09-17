@@ -6,6 +6,7 @@
   "hlx.points_got": "[green][HLstatsX][default] Vous avez [lime]obtenu +{0} points[default] ({1}) pour [yellow]{2}[default] !",
   "hlx.points_lost": "[green][HLstatsX][default] Vous avez [red]perdu -{0} points[default] ({1}) pour [yellow]{2}[default] !",
   "hlx.kill_reward": "[green][HLstatsX][default] [yellow]{0}[default] ({1}) a obtenu [lime]+{2} points[default] pour avoir tué [yellow]{3}[default] ({4}) !",
+  "hlx.teamkill_penalty": "[green][HLstatsX][default] [yellow]{0}[default] a perdu [red]-{1} points[default] ({2}) pour tir allié !",
   "hlx.session": "[green][HLstatsX][default] Session de [yellow]{0}[default] : [lime]{1} éliminations[default], [red]{2} morts[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Précision : [yellow]{6}[default]%",
   "hlx.next": "[green][HLstatsX][default] Prochain joueur au-dessus de vous : [yellow]{0}[default] (Rang #{1} avec {2} points)",
   "hlx.top10_header": "[green][HLstatsX][default] Top 10 des joueurs :",

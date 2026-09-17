@@ -8,3 +8,4 @@ MaxPlayers = 32
 ReceiverPort = 27015
 MenuType = "CustomHud"
 CustomMenuLayout = "resources/panorama/layout/custom_game/hlx_menu.xml"
+AutoCloseMenuSeconds = 15

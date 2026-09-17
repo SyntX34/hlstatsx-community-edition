@@ -6,6 +6,7 @@
   "hlx.points_got": "[green][HLstatsX][default] Du [lime]fik +{0} point[default] ({1}) for [yellow]{2}[default]!",
   "hlx.points_lost": "[green][HLstatsX][default] Du [red]mistede -{0} point[default] ({1}) for [yellow]{2}[default]!",
   "hlx.kill_reward": "[green][HLstatsX][default] [yellow]{0}[default] ({1}) fik [lime]+{2} point[default] for at dræbe [yellow]{3}[default] ({4})!",
+  "hlx.teamkill_penalty": "[green][HLstatsX][default] [yellow]{0}[default] mistede [red]-{1} point[default] ({2}) for holddrab!",
   "hlx.session": "[green][HLstatsX][default] [yellow]{0}[default] session: [lime]{1} drab[default], [red]{2} dødsfald[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Præcision: [yellow]{6}[default]%",
   "hlx.next": "[green][HLstatsX][default] Næste spiller over dig: [yellow]{0}[default] (Rang #{1} med {2} point)",
   "hlx.top10_header": "[green][HLstatsX][default] Top 10 spillere:",

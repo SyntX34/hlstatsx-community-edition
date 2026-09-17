@@ -6,6 +6,7 @@
   "hlx.points_got": "[green][HLstatsX][default] Sait [lime]+{0} pistettä[default] ({1}) syystä [yellow]{2}[default]!",
   "hlx.points_lost": "[green][HLstatsX][default] Menetit [red]-{0} pistettä[default] ({1}) syystä [yellow]{2}[default]!",
   "hlx.kill_reward": "[green][HLstatsX][default] [yellow]{0}[default] ({1}) sai [lime]+{2} pistettä[default] pelaajan [yellow]{3}[default] ({4}) tappamisesta!",
+  "hlx.teamkill_penalty": "[green][HLstatsX][default] [yellow]{0}[default] menetti [red]-{1} pistettä[default] ({2}) oman pelaajan tappamisesta!",
   "hlx.session": "[green][HLstatsX][default] Pelaajan [yellow]{0}[default] sessio: [lime]{1} tappoa[default], [red]{2} kuolemaa[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Tarkkuus: [yellow]{6}[default]%",
   "hlx.next": "[green][HLstatsX][default] Seuraava pelaaja yläpuolellasi: [yellow]{0}[default] (Sija #{1}, {2} pistettä)",
   "hlx.top10_header": "[green][HLstatsX][default] Parhaat 10 Pelaajaa:",

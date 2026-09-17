@@ -6,6 +6,7 @@
   "hlx.points_got": "[green][HLstatsX][default] Вы получили [lime]+{0} очков[default] ({1}) за [yellow]{2}[default]!",
   "hlx.points_lost": "[green][HLstatsX][default] Вы потеряли [red]-{0} очков[default] ({1}) за [yellow]{2}[default]!",
   "hlx.kill_reward": "[green][HLstatsX][default] [yellow]{0}[default] ({1}) получил [lime]+{2} очков[default] за убийство [yellow]{3}[default] ({4})!",
+  "hlx.teamkill_penalty": "[green][HLstatsX][default] [yellow]{0}[default] потерял [red]-{1} очков[default] ({2}) за убийство товарища по команде!",
   "hlx.session": "[green][HLstatsX][default] Сессия игрока [yellow]{0}[default]: [lime]{1} убийств[default], [red]{2} смертей[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Точность: [yellow]{6}[default]%",
   "hlx.next": "[green][HLstatsX][default] Следующий в рейтинге перед вами: [yellow]{0}[default] (Ранг #{1} с {2} очками)",
   "hlx.top10_header": "[green][HLstatsX][default] Топ-10 игроков:",

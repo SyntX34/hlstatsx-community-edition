@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Runtime.InteropServices;
 using SwiftlyS2.Shared;
 using SwiftlyS2.Shared.Commands;
@@ -19,11 +20,12 @@ namespace HLStatsX;
 
 [PluginMetadata(
     Id = "HLStatsX",
-    Version = "1.1.1",
+    Version = "1.1.2",
     Name = "HLStatsX:CE Ingame Plugin (SwiftlyS2)",
     Author = "SyntX34",
     Description = "Provides CS2 in-game interaction and messaging with HLstatsX:CE daemon"
 )]
+
 public partial class HLStatsX : BasePlugin
 {
     private static readonly HashSet<string> BlockedCommands = new(StringComparer.OrdinalIgnoreCase)
@@ -144,6 +146,7 @@ public partial class HLStatsX : BasePlugin
         public int ReceiverPort { get; set; } = 27015;
         public string MenuType { get; set; } = "CustomHud";
         public string CustomMenuLayout { get; set; } = "resources/panorama/layout/custom_game/hlx_menu.xml";
+        public int AutoCloseMenuSeconds { get; set; } = 15;
     }
 
     private HLStatsXConfig _config = new();
@@ -151,6 +154,7 @@ public partial class HLStatsX : BasePlugin
     private static readonly Dictionary<ulong, Dictionary<string, HitgroupStats>> _Statsme2 = new();
     private readonly Dictionary<int, CCSCustomHudLayout> _playerHuds = new();
     private readonly HashSet<int> _activeHudPlayers = new();
+    private readonly Dictionary<int, System.Threading.CancellationTokenSource> _menuCloseTimers = new();
     private string _protectAddress = "";
     private bool _blockChatCommands = true;
     private string _messagePrefix = "";
@@ -241,6 +245,7 @@ public partial class HLStatsX : BasePlugin
                     else if (key.Equals("ReceiverPort", StringComparison.OrdinalIgnoreCase) && int.TryParse(val, out int rp)) _config.ReceiverPort = rp;
                     else if (key.Equals("MenuType", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(val)) _config.MenuType = val;
                     else if (key.Equals("CustomMenuLayout", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(val)) _config.CustomMenuLayout = val;
+                    else if (key.Equals("AutoCloseMenuSeconds", StringComparison.OrdinalIgnoreCase) && int.TryParse(val, out int acs)) _config.AutoCloseMenuSeconds = acs;
                 }
             }
             else
@@ -357,12 +362,12 @@ public partial class HLStatsX : BasePlugin
                     var player = FindPlayerTarget(target);
                     if (player != null && player.IsValid && !player.IsFakeClient)
                     {
-                        player.SendMessage(MessageType.Chat, FormatColors($"{_messagePrefix}{text}"));
+                        player.SendMessage(MessageType.Chat, FormatSourceModMessage(player, text));
                     }
                     else if (target.Equals("0") || target.Equals("ALL", StringComparison.OrdinalIgnoreCase))
                     {
                         foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
-                            p.SendMessage(MessageType.Chat, FormatColors($"{_messagePrefix}{text}"));
+                            p.SendMessage(MessageType.Chat, FormatSourceModMessage(p, text));
                     }
                     return;
                 }
@@ -378,12 +383,12 @@ public partial class HLStatsX : BasePlugin
                     var player = FindPlayerTarget(target);
                     if (player != null && player.IsValid && !player.IsFakeClient)
                     {
-                        player.SendMessage(MessageType.Chat, FormatColors($"{_messagePrefix}{text}"));
+                        player.SendMessage(MessageType.Chat, FormatSourceModMessage(player, text));
                     }
                     else if (target.Equals("0") || target.Equals("ALL", StringComparison.OrdinalIgnoreCase))
                     {
                         foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
-                            p.SendMessage(MessageType.Chat, FormatColors($"{_messagePrefix}{text}"));
+                            p.SendMessage(MessageType.Chat, FormatSourceModMessage(p, text));
                     }
                     return;
                 }
@@ -593,12 +598,11 @@ public partial class HLStatsX : BasePlugin
             string message = context.Args.Length >= 3
                 ? string.Join(" ", context.Args.Skip(2))
                 : string.Join(" ", context.Args.Skip(1));
-            string formattedMsg = FormatColors($"{_messagePrefix}{message}");
 
             if (targetUserIdStr.Equals("0") || targetUserIdStr.Equals("ALL", StringComparison.OrdinalIgnoreCase))
             {
                 foreach (var player in Core.PlayerManager.GetAllValidPlayers().Where(p => !p.IsFakeClient))
-                    player.SendMessage(MessageType.Chat, formattedMsg);
+                    player.SendMessage(MessageType.Chat, FormatSourceModMessage(player, message));
             }
             else
             {
@@ -606,7 +610,7 @@ public partial class HLStatsX : BasePlugin
                 {
                     var player = FindPlayerTarget(idStr);
                     if (player != null && player.IsValid && !player.IsFakeClient)
-                        player.SendMessage(MessageType.Chat, formattedMsg);
+                        player.SendMessage(MessageType.Chat, FormatSourceModMessage(player, message));
                 }
             }
         });
@@ -615,9 +619,9 @@ public partial class HLStatsX : BasePlugin
         {
             if (context.Args.Length < 2) return;
             var player = FindPlayerTarget(context.Args[0]);
-            string message = FormatColors($"{_messagePrefix}{string.Join(" ", context.Args.Skip(1))}");
+            string message = string.Join(" ", context.Args.Skip(1));
             if (player != null && player.IsValid && !player.IsFakeClient)
-                player.SendMessage(MessageType.Chat, message);
+                player.SendMessage(MessageType.Chat, FormatSourceModMessage(player, message));
         });
 
         Core.Command.RegisterCommand("hlx_sm_csay", (context) =>
@@ -1275,10 +1279,135 @@ public partial class HLStatsX : BasePlugin
             .Replace("{GOLD}",        "\x10", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static readonly Regex KillRewardRegex = new(
+        @"^(?<killer>.+?)\s*\((?<kpts>[\d,]+)\)(?<kextra>.*?)\s*got\s*(?<pts>[+-]?\d+)\s*points(?<vextra>.*?)\s*for killing\s*(?<victim>.+?)\s*\((?<vpts>[\d,]+)\)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex KillRewardSimpleRegex = new(
+        @"^(?<killer>.+?)\s*\((?<kpts>[\d,]+)\)(?<kextra>.*?)\s*got\s*(?<pts>[+-]?\d+)\s*points\s*for killing\s*(?<victim>.+)$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex ActionRewardRegex = new(
+        @"^(?<team>.+?)\s+(?<verb>got|lost)\s+(?<pts>[\d,]+)\s+points\s+for\s+(?<action>.+)$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex TeamkillPenaltyRegex = new(
+        @"^(?<killer>.+?)\s*lost\s*(?<pts>[\d,]+)\s*points\s*\((?<total>[\d,]+)\)\s*for team-killing",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex RankMsgRegex = new(
+        @"^(?<player>.+?)\s*is on rank\s*#?(?<rank>\d+)\s*of\s*(?<total>\d+)\s*with\s*(?<pts>[\d,]+)\s*(?:points|kills)!?$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex RankHiddenMsgRegex = new(
+        @"^(?<player>.+?)\s*is on rank\s*\(HIDDEN\)\s*of\s*(?<total>\d+)\s*with\s*(?<pts>[\d,]+)\s*(?:points|kills)!?$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private string FormatSourceModMessage(IPlayer player, string rawMsg)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(rawMsg)) return "";
+            var loc = Core.Translation.GetPlayerLocalizer(player);
+
+            var m = KillRewardRegex.Match(rawMsg);
+            if (m.Success)
+            {
+                string tmpl = loc["hlx.kill_reward"] ?? "[green][HLstatsX][default] [yellow]{0}[default] ({1}) got [lime]+{2} points[default] for killing [yellow]{3}[default] ({4})!";
+                string formatted = string.Format(tmpl, m.Groups["killer"].Value.Trim(), m.Groups["kpts"].Value.Trim(), m.Groups["pts"].Value.Trim(), m.Groups["victim"].Value.Trim(), m.Groups["vpts"].Value.Trim());
+                return FormatColors(formatted);
+            }
+
+            m = KillRewardSimpleRegex.Match(rawMsg);
+            if (m.Success)
+            {
+                string tmpl = loc["hlx.kill_reward"] ?? "[green][HLstatsX][default] [yellow]{0}[default] ({1}) got [lime]+{2} points[default] for killing [yellow]{3}[default] ({4})!";
+                string formatted = string.Format(tmpl, m.Groups["killer"].Value.Trim(), m.Groups["kpts"].Value.Trim(), m.Groups["pts"].Value.Trim(), m.Groups["victim"].Value.Trim(), "-");
+                return FormatColors(formatted);
+            }
+
+            m = TeamkillPenaltyRegex.Match(rawMsg);
+            if (m.Success)
+            {
+                string tmpl = loc["hlx.teamkill_penalty"] ?? "[green][HLstatsX][default] [yellow]{0}[default] lost [red]-{1} points[default] ({2}) for team-killing!";
+                string formatted = string.Format(tmpl, m.Groups["killer"].Value.Trim(), m.Groups["pts"].Value.Trim(), m.Groups["total"].Value.Trim());
+                return FormatColors(formatted);
+            }
+
+            m = ActionRewardRegex.Match(rawMsg);
+            if (m.Success)
+            {
+                string verb = m.Groups["verb"].Value.ToLowerInvariant();
+                string key = verb == "lost" ? "hlx.points_lost" : "hlx.points_got";
+                string tmpl = loc[key] ?? (verb == "lost"
+                    ? "[green][HLstatsX][default] You [red]lost -{0} points[default] ({1}) for [yellow]{2}[default]!"
+                    : "[green][HLstatsX][default] You [lime]got +{0} points[default] ({1}) for [yellow]{2}[default]!");
+                string formatted = string.Format(tmpl, m.Groups["pts"].Value.Trim(), m.Groups["team"].Value.Trim(), m.Groups["action"].Value.Trim());
+                return FormatColors(formatted);
+            }
+
+            m = RankMsgRegex.Match(rawMsg);
+            if (m.Success)
+            {
+                string tmpl = loc["hlx.rank"] ?? "[green][HLstatsX][default] [yellow]{0}[default] is on rank [lightred]#{1}[default] of [lightred]{2}[default] with [lightred]{3}[default] points!";
+                string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), m.Groups["rank"].Value.Trim(), m.Groups["total"].Value.Trim(), m.Groups["pts"].Value.Trim());
+                return FormatColors(formatted);
+            }
+
+            m = RankHiddenMsgRegex.Match(rawMsg);
+            if (m.Success)
+            {
+                string tmpl = loc["hlx.rank_hidden"] ?? "[green][HLstatsX][default] [yellow]{0}[default] is on rank [grey](HIDDEN)[default] of [lightred]{1}[default] with [lightred]{2}[default] points!";
+                string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), m.Groups["total"].Value.Trim(), m.Groups["pts"].Value.Trim());
+                return FormatColors(formatted);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HLstatsX:CE] FormatSourceModMessage error: {ex.Message}");
+        }
+
+        return FormatColors($"{_messagePrefix}{rawMsg}");
+    }
+
+    private void CancelMenuAutoClose(int playerId)
+    {
+        if (_menuCloseTimers.TryGetValue(playerId, out var cts))
+        {
+            try { cts?.Cancel(); } catch {}
+            _menuCloseTimers.Remove(playerId);
+        }
+    }
+
+    private void ScheduleMenuAutoClose(IPlayer player)
+    {
+        if (player == null || !player.IsValid) return;
+        int playerId = player.PlayerID;
+        CancelMenuAutoClose(playerId);
+
+        if (_config.AutoCloseMenuSeconds > 0)
+        {
+            var cts = Core.Scheduler.DelayBySeconds(_config.AutoCloseMenuSeconds, () =>
+            {
+                CloseCustomHud(playerId);
+                try { Core.MenusAPI.CloseActiveMenu(player); } catch {}
+                _menuCloseTimers.Remove(playerId);
+            });
+            _menuCloseTimers[playerId] = cts;
+        }
+    }
+
     private void CloseAllCustomHuds()
     {
         try
         {
+            foreach (var kvp in _menuCloseTimers)
+            {
+                try { kvp.Value?.Cancel(); } catch {}
+            }
+            _menuCloseTimers.Clear();
+
+
             foreach (var kvp in _playerHuds)
             {
                 var playerId = kvp.Key;
@@ -1303,6 +1432,7 @@ public partial class HLStatsX : BasePlugin
     {
         try
         {
+            CancelMenuAutoClose(playerId);
             _activeHudPlayers.Remove(playerId);
             if (_playerHuds.TryGetValue(playerId, out var hud))
             {
@@ -1331,6 +1461,8 @@ public partial class HLStatsX : BasePlugin
     private void OpenStatsMenu(IPlayer player)
     {
         if (player == null || !player.IsValid) return;
+
+        ScheduleMenuAutoClose(player);
 
         if (_config.MenuType.Equals("CustomHud", StringComparison.OrdinalIgnoreCase))
         {
@@ -1537,6 +1669,7 @@ public partial class HLStatsX : BasePlugin
 
         public async System.Threading.Tasks.ValueTask OnClickAsync(IPlayer player)
         {
+            _plugin.CancelMenuAutoClose(player.PlayerID);
             _plugin.SendLog(player, _command, "say");
             await System.Threading.Tasks.ValueTask.CompletedTask;
         }
