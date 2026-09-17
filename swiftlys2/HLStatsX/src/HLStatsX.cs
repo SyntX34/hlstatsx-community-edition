@@ -987,7 +987,10 @@ public partial class HLStatsX : BasePlugin
         Core.Event.OnMapLoad += (@event) =>
         {
             CloseAllCustomHuds();
-            var mapName = @event.MapName ?? "";
+            var rawMap = @event.MapName ?? "";
+            var mapName = rawMap.Contains('/')
+                ? rawMap.Substring(rawMap.LastIndexOf('/') + 1)
+                : rawMap;
             SendUdpLog($"server_cvar: \"maxplayers\" \"{_config.MaxPlayers}\"");
             SendUdpLog($"Loading map \"{mapName}\"");
             SendUdpLog($"Started map \"{mapName}\" (CRC \"-1\")");
