@@ -1970,7 +1970,10 @@ public partial class HLStatsX : BasePlugin
 
         ScheduleMenuAutoClose(player);
 
-        if (_config.MenuType.Equals("CustomHud", StringComparison.OrdinalIgnoreCase))
+        bool isCustomHud = _config.MenuType.Equals("2", StringComparison.OrdinalIgnoreCase) ||
+                           _config.MenuType.Equals("CustomHud", StringComparison.OrdinalIgnoreCase);
+
+        if (isCustomHud)
         {
             OpenCustomHudMenu(player);
             return;

@@ -98,6 +98,7 @@ log on
 ```
 
 > **Note:** Do **NOT** use `logaddress_add` in CS2. All log streaming, proxy headers (`ProxyKey`), and bi-directional command execution are handled natively over UDP by this plugin via `config.toml`.
+> **Note:** ``logaddress_add`` or any method to forward logging details to external api points is removed in cs2. In cs2 the only way to forward logs is to use a plugin or server mod that hooks into the game events and sends the logs to the daemon. 
 
 ---
 

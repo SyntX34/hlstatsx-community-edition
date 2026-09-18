@@ -6,7 +6,8 @@ ServerPort = 27015
 ProxyKey = ""
 MaxPlayers = 32
 ReceiverPort = 27016
-MenuType = "CustomHud"
+# Menu display type: 1 = BuiltIn (Swiftly Menu API), 2 = CustomHud (Panorama XML)
+MenuType = 2
 CustomMenuLayout = "resources/panorama/layout/custom_game/hlx_menu.xml"
 CustomCsayLayout = "resources/panorama/layout/custom_game/hlx_csay.xml"
 CustomTsayLayout = "resources/panorama/layout/custom_game/hlx_tsay.xml"
