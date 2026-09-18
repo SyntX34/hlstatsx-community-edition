@@ -63,6 +63,7 @@ sub new
 	$self->{id}             = $serverId;
 	$self->{address}        = $address;
 	$self->{port}           = $port;
+	$self->{plugin_port}    = $port + 1;  # SwiftlyS2 UDP receiver = game_port+1 (e.g. 27016 for a 27015 server)
 	$self->{game}           = $game;
 	$self->{rcon}           = $rcon_pass;
 	$self->{srv_players}	= ();
@@ -418,8 +419,8 @@ sub dorcon
 	if ($self->{mod} eq "SWIFTLYS2" || $self->{play_game} == CS2()) {
 		$command =~ s/;//g;
 		&::printNotice("SWIFTLYS2_UDP", $command, 1);
-		my $target_ip = $self->{address};
-		my $target_port = $self->{port};
+		my $target_ip   = $self->{address};
+		my $target_port = ($self->{plugin_port} > 0) ? $self->{plugin_port} : $self->{port};
 		if ($target_ip ne "" && $target_port > 0) {
 			eval {
 				my $udp_sock = IO::Socket::INET->new(

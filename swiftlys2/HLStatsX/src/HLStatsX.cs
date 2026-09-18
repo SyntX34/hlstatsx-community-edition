@@ -143,6 +143,7 @@ public partial class HLStatsX : BasePlugin
         public int ServerPort { get; set; } = 27015;
         public string ProxyKey { get; set; } = "";
         public int MaxPlayers { get; set; } = 32;
+        public int ReceiverPort { get; set; } = 27016;  // Must equal ServerPort+1; daemon sends HLX_CMD here
         public string MenuType { get; set; } = "CustomHud";
         public string CustomMenuLayout { get; set; } = "resources/panorama/layout/custom_game/hlx_menu.xml";
         public int AutoCloseMenuSeconds { get; set; } = 15;
@@ -158,6 +159,8 @@ public partial class HLStatsX : BasePlugin
     private bool _blockChatCommands = true;
     private string _messagePrefix = "";
     private UdpClient? _udpClient;
+    private UdpClient? _udpReceiver;
+    private System.Threading.CancellationTokenSource? _udpCts;
 
     public HLStatsX(ISwiftlyCore core) : base(core)
     {
@@ -239,6 +242,7 @@ public partial class HLStatsX : BasePlugin
                     else if (key.Equals("ServerPort", StringComparison.OrdinalIgnoreCase) && int.TryParse(val, out int sp)) _config.ServerPort = sp;
                     else if (key.Equals("ProxyKey", StringComparison.OrdinalIgnoreCase)) _config.ProxyKey = val;
                     else if (key.Equals("MaxPlayers", StringComparison.OrdinalIgnoreCase) && int.TryParse(val, out int mp)) _config.MaxPlayers = mp;
+                    else if (key.Equals("ReceiverPort", StringComparison.OrdinalIgnoreCase) && int.TryParse(val, out int rp)) _config.ReceiverPort = rp;
                     else if (key.Equals("MenuType", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(val)) _config.MenuType = val;
                     else if (key.Equals("CustomMenuLayout", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(val)) _config.CustomMenuLayout = val;
                     else if (key.Equals("AutoCloseMenuSeconds", StringComparison.OrdinalIgnoreCase) && int.TryParse(val, out int acs)) _config.AutoCloseMenuSeconds = acs;
@@ -255,6 +259,7 @@ public partial class HLStatsX : BasePlugin
         }
 
         _udpClient = new UdpClient();
+        StartUdpReceiver();
         RegisterServerCommands();
         RegisterGameEvents();
         SendUdpLog($"server_cvar: \"maxplayers\" \"{_config.MaxPlayers}\"");
@@ -265,15 +270,95 @@ public partial class HLStatsX : BasePlugin
             if (team != "Unassigned")
                 SendLog(player, team, "joined team");
         }
-        Console.WriteLine($"[HLstatsX:CE] Loaded. Sending logs to {_config.DaemonHost}:{_config.DaemonPort} (Server: {_config.ServerIp}:{_config.ServerPort}, ProxyKey: {_config.ProxyKey}, MaxPlayers: {_config.MaxPlayers})");
+        Console.WriteLine($"[HLstatsX:CE] Loaded. Sending logs to {_config.DaemonHost}:{_config.DaemonPort} (Server: {_config.ServerIp}:{_config.ServerPort}, ReceiverPort: {_config.ReceiverPort}, MaxPlayers: {_config.MaxPlayers})");
     }
 
     public override void Unload()
     {
+        try { _udpCts?.Cancel(); _udpCts?.Dispose(); _udpCts = null; } catch {}
+        try { _udpReceiver?.Close(); _udpReceiver?.Dispose(); _udpReceiver = null; } catch {}
         CloseAllCustomHuds();
         _udpClient?.Close();
         _udpClient = null;
         Console.WriteLine("[HLstatsX:CE] Unloaded.");
+    }
+
+    private void StartUdpReceiver()
+    {
+        try
+        {
+            _udpCts = new System.Threading.CancellationTokenSource();
+            _udpReceiver = new UdpClient(_config.ReceiverPort);
+            var token = _udpCts.Token;
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    try
+                    {
+                        var res = await _udpReceiver.ReceiveAsync(token);
+                        var raw = Encoding.UTF8.GetString(res.Buffer).Trim();
+                        if (string.IsNullOrEmpty(raw)) continue;
+                        if (raw.StartsWith("HLX_CMD ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var cmd = raw.Substring(8).Trim();
+                            if (!string.IsNullOrEmpty(cmd))
+                                Core.Scheduler.NextTick(() => ExecuteDaemonCommand(cmd));
+                        }
+                    }
+                    catch (OperationCanceledException) { break; }
+                    catch (ObjectDisposedException) { break; }
+                    catch (Exception ex) { Console.WriteLine($"[HLstatsX:CE] UDP receive warning: {ex.Message}"); }
+                }
+            }, token);
+            Console.WriteLine($"[HLstatsX:CE] Listening for daemon commands on UDP port {_config.ReceiverPort}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HLstatsX:CE] Could not bind UDP receiver on port {_config.ReceiverPort}: {ex.Message}");
+        }
+    }
+
+    private void ExecuteDaemonCommand(string rawCmd)
+    {
+        try
+        {
+            if (rawCmd.StartsWith("hlx_sm_msay ", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = rawCmd.Substring(12).Trim().Split(' ', 3);
+                if (parts.Length >= 3)
+                {
+                    string target = parts[0];
+                    string text = parts[2].Trim('"', '\'').Replace("\\n", "\n");
+                    var player = FindPlayerTarget(target);
+                    if (player != null && player.IsValid && !player.IsFakeClient)
+                        player.SendMessage(MessageType.Chat, FormatSourceModMessage(player, text));
+                    else if (target.Equals("0") || target.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+                        foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
+                            p.SendMessage(MessageType.Chat, FormatSourceModMessage(p, text));
+                    return;
+                }
+            }
+            if (rawCmd.StartsWith("hlx_sm_psay ", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = rawCmd.Substring(12).Trim().Split(' ', 3);
+                if (parts.Length >= 2)
+                {
+                    string target = parts[0];
+                    string text = (parts.Length >= 3 ? parts[2] : parts[1]).Trim('"', '\'');
+                    var player = FindPlayerTarget(target);
+                    if (player != null && player.IsValid && !player.IsFakeClient)
+                        player.SendMessage(MessageType.Chat, FormatSourceModMessage(player, text));
+                    else if (target.Equals("0") || target.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+                        foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
+                            p.SendMessage(MessageType.Chat, FormatSourceModMessage(p, text));
+                    return;
+                }
+            }
+            // Fallback: execute as server command
+            Core.Engine.ExecuteCommand(rawCmd);
+        }
+        catch (Exception ex) { Console.WriteLine($"[HLstatsX:CE] ExecuteDaemonCommand error: {ex.Message}"); }
     }
 
     private void SendUdpLog(string logLine)

@@ -2306,6 +2306,16 @@ while ($loop = &getLine()) {
 				if ($s_cfg{"Mod"} ne "") {
 					&printEvent("SERVER", "Using plugin ".$s_cfg{"Mod"}." for internal functions!", 1);
 				}
+
+				if ($s_cfg{"Mod"} eq "SWIFTLYS2") {
+					if (defined($s_cfg{"PluginPort"}) && $s_cfg{"PluginPort"} > 0) {
+						$g_servers{$s_addr}->set("plugin_port", $s_cfg{"PluginPort"});
+						&printEvent("SERVER", "SwiftlyS2 plugin UDP port set to ".$s_cfg{"PluginPort"}, 1);
+					} else {
+						&printEvent("SERVER", "SwiftlyS2 plugin UDP port defaulting to ".($g_servers{$s_addr}->{port}+1), 1);
+					}
+				}
+
 				if ($s_cfg{"ConnectAnnounce"} == 1) {
 					$g_servers{$s_addr}->set("connect_announce", $s_cfg{"ConnectAnnounce"});
 					&printEvent("SERVER", "Connect Announce is enabled", 1);
