@@ -187,6 +187,45 @@ The plugin listens on `ReceiverPort` (`ServerPort + 1`) and executes:
 
 ---
 
+## 🔌 Developer API (Contract Interface)
+
+HLStatsX provides a standalone contract interface (`HLStatsX.Contract.dll`) allowing other SwiftlyS2 plugins (such as Zombie:Reloaded, VIP Core, custom gamemodes) to trigger points, log actions, and open stats menus without hard dependencies.
+
+### 1. Reference the Contract
+Add `HLStatsX.Contract.dll` or project reference to your plugin:
+```xml
+<ItemGroup>
+  <ProjectReference Include="..\HLStatsX.Contract\HLStatsX.Contract.csproj" />
+</ItemGroup>
+```
+
+### 2. Consume via SwiftlyS2 Interface Manager
+```csharp
+using HLStatsX.Contract;
+
+public class MyPlugin : BasePlugin
+{
+    private IHLStatsXApi? _hlxApi;
+
+    public override void UseSharedInterface(IInterfaceManager interfaceManager)
+    {
+        _hlxApi = interfaceManager.GetSharedInterface<IHLStatsXApi>("HlStatsX.API");
+        _hlxApi?.RegisterConsumer("MyPlugin");
+    }
+
+    public void OnZombieInfect(IPlayer attacker, IPlayer victim)
+    {
+        // Awards points defined in HLStatsX Web Panel -> Manage Actions
+        _hlxApi?.TriggerPlayerAction(attacker, "zombie_infection");
+        _hlxApi?.TriggerPlayerAction(victim, "got_infected");
+    }
+}
+```
+
+A complete working example is provided in [examples/HLStatsX.Example](examples/HLStatsX.Example/HLStatsXExample.cs).
+
+---
+
 ## 📜 License
 
 This project is licensed under the [MIT License](LICENSE). Anyone is free to use, modify, and contribute to this project, provided that credit is given to the original author (**SyntX34**).

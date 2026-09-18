@@ -22,6 +22,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\HLStatsX.Contract\HLStatsX.Contract.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Content Include="resources/panorama/**/*;resources/gamedata/**/*;resources/templates/**/*;resources/translations/**/*;configs/**/*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
