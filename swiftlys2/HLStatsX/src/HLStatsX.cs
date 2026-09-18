@@ -20,7 +20,7 @@ namespace HLStatsX;
 
 [PluginMetadata(
     Id = "HLStatsX",
-    Version = "1.1.3",
+    Version = "1.1.4",
     Name = "HLStatsX:CE Ingame Plugin (SwiftlyS2)",
     Author = "SyntX34",
     Description = "Provides CS2 in-game interaction and messaging with HLstatsX:CE daemon"
@@ -164,6 +164,8 @@ public partial class HLStatsX : BasePlugin
     private string _protectAddress = "";
     private bool _blockChatCommands = true;
     private string _messagePrefix = "";
+    private string _webpageUrl = "";
+    private string _hlxceVersion = "";
     private UdpClient? _udpClient;
     private UdpClient? _udpReceiver;
     private System.Threading.CancellationTokenSource? _udpCts;
@@ -331,6 +333,13 @@ public partial class HLStatsX : BasePlugin
     {
         try
         {
+            if (rawCmd.StartsWith("say ", StringComparison.OrdinalIgnoreCase))
+            {
+                string text = rawCmd.Substring(4).Trim().Trim('"', '\'');
+                foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
+                    p.SendMessage(MessageType.Chat, FormatSourceModMessage(p, text));
+                return;
+            }
             if (rawCmd.StartsWith("hlx_sm_msay ", StringComparison.OrdinalIgnoreCase))
             {
                 var parts = rawCmd.Substring(12).Trim().Split(' ', 3);
@@ -347,9 +356,50 @@ public partial class HLStatsX : BasePlugin
                     return;
                 }
             }
-            if (rawCmd.StartsWith("hlx_sm_psay ", StringComparison.OrdinalIgnoreCase))
+            if (rawCmd.StartsWith("hlx_sm_psay ", StringComparison.OrdinalIgnoreCase) || rawCmd.StartsWith("hlx_sm_psay2 ", StringComparison.OrdinalIgnoreCase))
             {
-                var parts = rawCmd.Substring(12).Trim().Split(' ', 3);
+                int prefixLen = rawCmd.StartsWith("hlx_sm_psay2 ", StringComparison.OrdinalIgnoreCase) ? 13 : 12;
+                string payload = rawCmd.Substring(prefixLen).Trim();
+                // If payload starts with a quote or does not contain multiple parameters, it's a broadcast to all
+                if (payload.StartsWith('"') || payload.StartsWith('\''))
+                {
+                    // Check if format is: "userid" [color] "message"
+                    int secondQuote = payload.IndexOf(payload[0], 1);
+                    if (secondQuote > 0 && secondQuote < payload.Length - 1)
+                    {
+                        string possibleTarget = payload.Substring(1, secondQuote - 1).Trim();
+                        string remainder = payload.Substring(secondQuote + 1).Trim();
+                        if (possibleTarget.Equals("0") || possibleTarget.Equals("ALL", StringComparison.OrdinalIgnoreCase) || possibleTarget.Contains(',') || int.TryParse(possibleTarget, out _))
+                        {
+                            // It's targeted: "7" [color] "message"
+                            var remParts = remainder.Split(' ', 2);
+                            string text = (remParts.Length >= 2 && int.TryParse(remParts[0], out _) ? remParts[1] : remainder).Trim('"', '\'');
+                            if (possibleTarget.Equals("0") || possibleTarget.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+                            {
+                                foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
+                                    p.SendMessage(MessageType.Chat, FormatSourceModMessage(p, text));
+                            }
+                            else
+                            {
+                                foreach (var idStr in possibleTarget.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                                {
+                                    var player = FindPlayerTarget(idStr);
+                                    if (player != null && player.IsValid && !player.IsFakeClient)
+                                        player.SendMessage(MessageType.Chat, FormatSourceModMessage(player, text));
+                                }
+                            }
+                            return;
+                        }
+                    }
+                    // Otherwise it's a broadcast message in quotes e.g. hlx_sm_psay "HLstatsX:CE - Tracking 25 players..."
+                    string broadcastText = payload.Trim('"', '\'');
+                    foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
+                        p.SendMessage(MessageType.Chat, FormatSourceModMessage(p, broadcastText));
+                    return;
+                }
+
+                // Format without leading quote: <target> [color] <message>
+                var parts = payload.Split(' ', 3);
                 if (parts.Length >= 2)
                 {
                     string target = parts[0];
@@ -368,6 +418,13 @@ public partial class HLStatsX : BasePlugin
                                 player.SendMessage(MessageType.Chat, FormatSourceModMessage(player, text));
                         }
                     }
+                    return;
+                }
+                else if (parts.Length == 1)
+                {
+                    string text = parts[0].Trim('"', '\'');
+                    foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
+                        p.SendMessage(MessageType.Chat, FormatSourceModMessage(p, text));
                     return;
                 }
             }
@@ -417,6 +474,16 @@ public partial class HLStatsX : BasePlugin
                     }
                     return;
                 }
+            }
+            if (rawCmd.StartsWith("hlxce_webpage ", StringComparison.OrdinalIgnoreCase))
+            {
+                _webpageUrl = rawCmd.Substring(14).Trim().Trim('"', '\'');
+                return;
+            }
+            if (rawCmd.StartsWith("hlxce_version ", StringComparison.OrdinalIgnoreCase))
+            {
+                _hlxceVersion = rawCmd.Substring(14).Trim().Trim('"', '\'');
+                return;
             }
             // Fallback: execute as server command
             Core.Engine.ExecuteCommand(rawCmd);
@@ -615,7 +682,14 @@ public partial class HLStatsX : BasePlugin
     {
         Core.Command.RegisterCommand("hlx_sm_psay", (context) =>
         {
-            if (context.Args.Length < 2) return;
+            if (context.Args.Length == 0) return;
+            if (context.Args.Length == 1)
+            {
+                string text = context.Args[0].Trim('"', '\'');
+                foreach (var player in Core.PlayerManager.GetAllValidPlayers().Where(p => !p.IsFakeClient))
+                    player.SendMessage(MessageType.Chat, FormatSourceModMessage(player, text));
+                return;
+            }
             string targetUserIdStr = context.Args[0];
             string message = context.Args.Length >= 3
                 ? string.Join(" ", context.Args.Skip(2))
@@ -766,6 +840,18 @@ public partial class HLStatsX : BasePlugin
         Core.Command.RegisterCommand("hlx_message_prefix_clear", (context) =>
         {
             _messagePrefix = "";
+        }, registerRaw: true);
+
+        Core.Command.RegisterCommand("hlxce_webpage", (context) =>
+        {
+            if (context.Args.Length > 0)
+                _webpageUrl = string.Join(" ", context.Args).Trim('"', '\'');
+        }, registerRaw: true);
+
+        Core.Command.RegisterCommand("hlxce_version", (context) =>
+        {
+            if (context.Args.Length > 0)
+                _hlxceVersion = string.Join(" ", context.Args).Trim('"', '\'');
         }, registerRaw: true);
 
         void RegisterPlayerStatsCommand(string name)
@@ -1306,55 +1392,55 @@ public partial class HLStatsX : BasePlugin
     }
 
     private static readonly Regex KillRewardRegex = new(
-        @"^(?<killer>.+?)\s*\((?<kpts>[\d,]+)\)(?<kextra>.*?)\s*got\s*(?<pts>[+-]?\d+)\s*points(?<vextra>.*?)\s*for killing\s*(?<victim>.+?)\s*\((?<vpts>[\d,]+)\)",
+        @"(?<killer>.+?)\s*\((?<kpts>[\d,]+)\)(?<kextra>.*?)\s*got\s*(?<pts>[+-]?\d+)\s*points(?<vextra>.*?)\s*for killing\s*(?<victim>.+?)\s*\((?<vpts>[\d,]+)\)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex KillRewardSimpleRegex = new(
-        @"^(?<killer>.+?)\s*\((?<kpts>[\d,]+)\)(?<kextra>.*?)\s*got\s*(?<pts>[+-]?\d+)\s*points\s*for killing\s*(?<victim>.+)$",
+        @"(?<killer>.+?)\s*\((?<kpts>[\d,]+)\)(?<kextra>.*?)\s*got\s*(?<pts>[+-]?\d+)\s*points\s*for killing\s*(?<victim>.+)$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex ActionRewardRegex = new(
-        @"^(?<team>.+?)\s+(?<verb>got|lost)\s+(?<pts>[\d,]+)\s+points\s+for\s+(?<action>.+)$",
+        @"(?<team>.+?)\s+(?<verb>got|lost)\s+(?<pts>[\d,]+)\s+points\s+for\s+(?<action>.+)$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex TeamkillPenaltyRegex = new(
-        @"^(?<killer>.+?)\s*lost\s*(?<pts>[\d,]+)\s*points\s*\((?<total>[\d,]+)\)\s*for team-killing",
+        @"(?<killer>.+?)\s*lost\s*(?<pts>[\d,]+)\s*points\s*\((?<total>[\d,]+)\)\s*for team-killing",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex RankMsgRegex = new(
-        @"^(?<player>.+?)\s*is on rank\s*#?(?<rank>\d+)\s*of\s*(?<total>\d+)\s*with\s*(?<pts>[\d,]+)\s*(?:points|kills)!?$",
+        @"(?<player>.+?)\s*is on rank\s*#?(?<rank>\d+)\s*of\s*(?<total>\d+)\s*with\s*(?<pts>[\d,]+)\s*(?:points|kills)!?",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex RankHiddenMsgRegex = new(
-        @"^(?<player>.+?)\s*is on rank\s*\(HIDDEN\)\s*of\s*(?<total>\d+)\s*with\s*(?<pts>[\d,]+)\s*(?:points|kills)!?$",
+        @"(?<player>.+?)\s*is on rank\s*\(HIDDEN\)\s*of\s*(?<total>\d+)\s*with\s*(?<pts>[\d,]+)\s*(?:points|kills)!?",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex ConnectRankCountryRegex = new(
-        @"^(?<player>.+?)\s*\(Pos\s*(?<rank>\d+)\s*with\s*(?<pts>[\d,]+)\s*(?:points|kills)\)\s*has connected from\s*(?<country>.+)$",
+        @"(?<player>.+?)\s*\(Pos\s*(?<rank>\d+)\s*with\s*(?<pts>[\d,]+)\s*(?:points|kills)\)\s*has connected from\s*(?<country>.+)$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex ConnectRankRegex = new(
-        @"^(?<player>.+?)\s*\(Pos\s*(?<rank>\d+)\s*with\s*(?<pts>[\d,]+)\s*(?:points|kills)\)\s*has connected$",
+        @"(?<player>.+?)\s*\(Pos\s*(?<rank>\d+)\s*with\s*(?<pts>[\d,]+)\s*(?:points|kills)\)\s*has connected",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex NewConnectCountryRegex = new(
-        @"^New player\s+(?<player>.+?)\s+has connected from\s+(?<country>.+)$",
+        @"New player\s+(?<player>.+?)\s+has connected from\s+(?<country>.+)$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex ConnectCountryRegex = new(
-        @"^Player\s+(?<player>.+?)\s+has connected from\s+(?<country>.+)$",
+        @"Player\s+(?<player>.+?)\s+has connected from\s+(?<country>.+)$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex KDeathMsgRegex = new(
-        @"^(?<player>.+?)\s+has\s+(?<kills>\d+):(?<deaths>\d+)\s+frags,\s+(?<hs>\d+)\s+headshots\s*\((?<hpk>[\d.]+)%\),(?:\s*(?<acc>[\d.]+)%?\s*accuracy,)?\s*and a KD-Ratio of\s*(?<kd>[\d.]+)$",
+        @"(?<player>.+?)\s+has\s+(?<kills>\d+):(?<deaths>\d+)\s+frags,\s+(?<hs>\d+)\s+headshots\s*\((?<hpk>[\d.]+)%\),(?:\s*(?<acc>[\d.]+)%?\s*accuracy,)?\s*and a KD-Ratio of\s*(?<kd>[\d.]+)$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex SessionMsgRegex = new(
-        @"^(?<player>.+?)\s+has\s+(?<kills>\d+):(?<deaths>\d+)\s+frags(?:\s*\((?<ratio>[\d.]+)%\))?,\s+(?<hs>\d+)\s+headshots\s*\((?<hpk>[\d.]+)%\),(?:\s*(?<acc>[\d.]+)%?\s*accuracy,)?(?:\s*and a skill change of\s*(?<pts>[+-]?\d+)\s*points)?$",
+        @"(?<player>.+?)\s+has\s+(?<kills>\d+):(?<deaths>\d+)\s+frags(?:\s*\((?<ratio>[\d.]+)%\))?,\s+(?<hs>\d+)\s+headshots\s*\((?<hpk>[\d.]+)%\),(?:\s*(?<acc>[\d.]+)%?\s*accuracy,)?(?:\s*and a skill change of\s*(?<pts>[+-]?\d+)\s*points)?$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex NextMsgRegex = new(
-        @"^Next ranked (?:player )?above you:\s*(?<player>.+?)\s*\(Rank\s*#?(?<rank>\d+)\s*with\s*(?<pts>[\d,]+)\s*points\)$",
+        @"Next ranked (?:player )?above you:\s*(?<player>.+?)\s*\(Rank\s*#?(?<rank>\d+)\s*with\s*(?<pts>[\d,]+)\s*points\)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private string FormatSourceModMessage(IPlayer player, string rawMsg)
