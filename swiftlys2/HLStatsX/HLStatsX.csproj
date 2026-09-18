@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\HLStatsX.Contract\HLStatsX.Contract.csproj" />
+    <ProjectReference Include="..\HLStatsX.Contract\HLStatsX.Contract.csproj" Private="false" ExcludeAssets="runtime" />
   </ItemGroup>
 
   <ItemGroup>
@@ -33,7 +33,21 @@
 
   <ItemGroup>
     <Compile Remove="examples\**\*.cs" />
+    <Compile Remove="..\HLStatsX.Contract\**" />
+    <Content Remove="..\HLStatsX.Contract\**" />
+    <EmbeddedResource Remove="..\HLStatsX.Contract\**" />
+    <None Remove="..\HLStatsX.Contract\**" />
   </ItemGroup>
+
+  <Target Name="CopyContractToExports" AfterTargets="Build">
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)../HLStatsX.Contract/build/net10.0/HLStatsX.Contract.dll" DestinationFolder="$(MSBuildThisFileDirectory)resources/exports/" Condition="Exists('$(MSBuildThisFileDirectory)../HLStatsX.Contract/build/net10.0/HLStatsX.Contract.dll')" />
+  </Target>
+
+  <Target Name="CopyContractToExportsPublish" BeforeTargets="CreateZip" AfterTargets="Publish">
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)../HLStatsX.Contract/build/net10.0/HLStatsX.Contract.dll" DestinationFolder="$(PublishDir)resources/exports/" Condition="Exists('$(MSBuildThisFileDirectory)../HLStatsX.Contract/build/net10.0/HLStatsX.Contract.dll')" />
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)../HLStatsX.Contract/build/net10.0/HLStatsX.Contract.pdb" DestinationFolder="$(PublishDir)resources/exports/" Condition="Exists('$(MSBuildThisFileDirectory)../HLStatsX.Contract/build/net10.0/HLStatsX.Contract.pdb')" />
+    <Delete Files="$(PublishDir)HLStatsX.Contract.dll;$(PublishDir)HLStatsX.Contract.pdb" Condition="Exists('$(PublishDir)HLStatsX.Contract.dll')" />
+  </Target>
 
   <Target Name="CreateZip" AfterTargets="Publish">
     <ItemGroup>

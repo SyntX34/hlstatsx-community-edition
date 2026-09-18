@@ -7,10 +7,23 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>HLStatsX.Contract</AssemblyName>
     <RootNamespace>HLStatsX.Contract</RootNamespace>
+    <OutputPath>$(MSBuildThisFileDirectory)build/</OutputPath>
+    <PublishDir>$(OutputPath)publish/HLStatsX.Contract</PublishDir>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="SwiftlyS2.CS2" Version="*" ExcludeAssets="runtime" PrivateAssets="all" />
   </ItemGroup>
+
+  <Target Name="CreateZip" AfterTargets="Publish">
+    <ItemGroup>
+      <PublishFiles Include="$(PublishDir)**\*.*" />
+    </ItemGroup>
+    
+    <ZipDirectory SourceDirectory="$(PublishDir)../" DestinationFile="$(OutputPath)../$(AssemblyName).zip" Overwrite="true" />
+  </Target>
 
 </Project>
