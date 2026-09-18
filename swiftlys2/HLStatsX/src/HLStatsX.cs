@@ -437,7 +437,10 @@ public partial class HLStatsX : BasePlugin
                 var player = FindPlayerTarget(target);
                 if (player != null && player.IsValid && !player.IsFakeClient)
                 {
-                    SendChatMessage(player, message);
+                    int duration = 10;
+                    if (tokens.Count >= 1 && int.TryParse(tokens[0], out int tSec) && tSec > 0)
+                        duration = tSec;
+                    DisplayDaemonStatsMenu(player, message, duration);
                 }
                 else if (target.Equals("0") || target.Equals("ALL", StringComparison.OrdinalIgnoreCase))
                 {
@@ -2126,6 +2129,187 @@ public partial class HLStatsX : BasePlugin
             Console.WriteLine($"[HLstatsX:CE] Menu error: {ex.Message}");
             player.SendMessage(MessageType.Chat,
                 FormatColors("[gold][HLstatsX:CE][default] Commands: [green]!rank  !top10  !session  !statsme  !next  !weapons"));
+        }
+    }
+
+    private void DisplayDaemonStatsMenu(IPlayer player, string rawMessage, int duration = 10)
+    {
+        if (player == null || !player.IsValid) return;
+
+        bool isCustomHud = _config.MenuType.Equals("2", StringComparison.OrdinalIgnoreCase) ||
+                           _config.MenuType.Equals("CustomHud", StringComparison.OrdinalIgnoreCase);
+
+        if (isCustomHud)
+        {
+            DisplayCustomHudStats(player, rawMessage, duration);
+            return;
+        }
+
+        DisplayBuiltinStatsMenu(player, rawMessage, duration);
+    }
+
+    private void DisplayBuiltinStatsMenu(IPlayer player, string rawMessage, int duration = 10)
+    {
+        try
+        {
+            var rawLines = rawMessage.Replace("\r\n", "\n").Split('\n');
+            var builder = Core.MenusAPI.CreateBuilder();
+
+            string title = "► HLstatsX:CE Stats";
+            var optionLines = new List<string>();
+
+            foreach (var rawLine in rawLines)
+            {
+                var line = rawLine.Trim();
+                if (string.IsNullOrEmpty(line)) continue;
+
+                if (line.StartsWith("->", StringComparison.OrdinalIgnoreCase))
+                {
+                    line = line.Substring(2).Trim();
+                }
+
+                if (optionLines.Count == 0 && !char.IsDigit(line[0]))
+                {
+                    title = line;
+                }
+                else
+                {
+                    optionLines.Add(line);
+                }
+            }
+
+            builder.Design.SetMenuTitle(title);
+            builder.Design.SetMenuTitleVisible(true);
+            builder.Design.SetMenuTitleItemCountVisible(false);
+            builder.Design.SetMenuFooterVisible(true);
+            builder.Design.SetDefaultComment("HLStatsX Ingame Stats");
+
+            if (optionLines.Count == 0)
+            {
+                builder.AddOption(new HlxMenuOption(title, "hlx", player, this));
+            }
+            else
+            {
+                foreach (var opt in optionLines)
+                {
+                    builder.AddOption(new HlxMenuOption(opt, "hlx", player, this));
+                }
+            }
+
+            Core.MenusAPI.OpenMenuForPlayer(player, builder.Build());
+
+            if (duration > 0)
+            {
+                int playerId = player.PlayerID;
+                CancelMenuAutoClose(playerId);
+                var cts = Core.Scheduler.DelayBySeconds(duration, () =>
+                {
+                    try { Core.MenusAPI.CloseActiveMenu(player); } catch {}
+                    _menuCloseTimers.Remove(playerId);
+                });
+                _menuCloseTimers[playerId] = cts;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HLstatsX:CE] DisplayBuiltinStatsMenu error: {ex.Message}");
+            SendChatMessage(player, rawMessage);
+        }
+    }
+
+    private void DisplayCustomHudStats(IPlayer player, string rawMessage, int duration = 10)
+    {
+        try
+        {
+            int playerId = player.PlayerID;
+            CCSCustomHudLayout hud;
+
+            if (_playerHuds.TryGetValue(playerId, out var existingHud) && existingHud != null && existingHud.IsValid)
+            {
+                hud = existingHud;
+            }
+            else
+            {
+                hud = Core.EntitySystem.CreateEntity<CCSCustomHudLayout>();
+                hud.StrLayout = _config.CustomMenuLayout;
+                hud.StrLayoutUpdated();
+                hud.DispatchSpawn();
+
+                hud.SetTransmitState(false);
+                hud.SetTransmitState(true, playerId);
+                _playerHuds[playerId] = hud;
+            }
+
+            var rawLines = rawMessage.Replace("\r\n", "\n").Split('\n');
+            string title = "► HLstatsX:CE Stats";
+            var optionLines = new List<string>();
+
+            foreach (var rawLine in rawLines)
+            {
+                var line = rawLine.Trim();
+                if (string.IsNullOrEmpty(line)) continue;
+
+                if (line.StartsWith("->", StringComparison.OrdinalIgnoreCase))
+                {
+                    line = line.Substring(2).Trim();
+                }
+
+                if (optionLines.Count == 0 && !char.IsDigit(line[0]))
+                {
+                    title = line;
+                }
+                else
+                {
+                    optionLines.Add(line);
+                }
+            }
+
+            hud.SetDialogVariableString("HlxMenuTitle", "menu_title", title);
+
+            for (int i = 1; i <= 10; i++)
+            {
+                string key = $"HlxMenuOption{i:D2}";
+                string labelKey = $"HlxMenuOption{i:D2}Label";
+                string varName = $"option_{i:D2}";
+
+                if (i <= optionLines.Count)
+                {
+                    hud.SetDialogVariableString(labelKey, varName, optionLines[i - 1]);
+                    SetHudClass(hud, key, "Hidden", false);
+                    SetHudClass(hud, key, "Interactive", true);
+                }
+                else
+                {
+                    hud.SetDialogVariableString(labelKey, varName, "");
+                    SetHudClass(hud, key, "Hidden", true);
+                    SetHudClass(hud, key, "Interactive", false);
+                }
+            }
+
+            hud.SetDialogVariableString("HlxMenuExitLabel", "exit_text", "9. Exit");
+            SetHudClass(hud, "HlxMenuBack", "Hidden", true);
+            SetHudClass(hud, "HlxMenuNext", "Hidden", true);
+            SetHudClass(hud, "HlxMenuExit", "Hidden", false);
+            SetHudClass(hud, "HlxMenuExit", "Interactive", true);
+
+            hud.SetInputCaptureEnabledForPlayer(playerId, true);
+            SetHudClass(hud, "HlxMenuPanel", "Visible", true);
+            _activeHudPlayers.Add(playerId);
+
+            CancelMenuAutoClose(playerId);
+            if (duration > 0)
+            {
+                var cts = Core.Scheduler.DelayBySeconds(duration, () =>
+                {
+                    CloseCustomHud(playerId);
+                });
+                _menuCloseTimers[playerId] = cts;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HLstatsX:CE] DisplayCustomHudStats error: {ex.Message}. Falling back to BuiltIn menu.");
+            DisplayBuiltinStatsMenu(player, rawMessage, duration);
         }
     }
 
