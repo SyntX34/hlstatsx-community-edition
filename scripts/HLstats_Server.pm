@@ -1377,7 +1377,7 @@ sub messageAll
 	
 	if ($self->{broadcasting_events} == 1 || $force == 1)
 	{
-		if ($self->{mod} eq "SOURCEMOD" || $self->{mod} eq "AMXX")
+		if ($self->{mod} eq "SOURCEMOD" || $self->{mod} eq "SWIFTLYS2" || $self->{mod} eq "AMXX")
 		{
 			my @userlist;
 

@@ -10,5 +10,9 @@
   "hlx.session": "[green][HLstatsX][default] Sesión de [yellow]{0}[default]: [lime]{1} bajas[default], [red]{2} muertes[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Precisión: [yellow]{6}[default]%",
   "hlx.next": "[green][HLstatsX][default] Próximo jugador encima de ti: [yellow]{0}[default] (Rango #{1} con {2} puntos)",
   "hlx.top10_header": "[green][HLstatsX][default] Mejores 10 Jugadores:",
-  "hlx.top10_entry": "[lightred]#{0}[default] [yellow]{1}[default] - [lime]{2} pts[default] (K/D: {3})"
+  "hlx.top10_entry": "[lightred]#{0}[default] [yellow]{1}[default] - [lime]{2} pts[default] (K/D: {3})",
+  "hlx.player_connected_rank_country": "[green][HLstatsX][default] [yellow]{0}[default] (Pos [lightred]#{1}[default] con [lime]{2}[default] puntos) se ha conectado desde [yellow]{3}[default]!",
+  "hlx.player_connected_rank": "[green][HLstatsX][default] [yellow]{0}[default] (Pos [lightred]#{1}[default] con [lime]{2}[default] puntos) se ha conectado!",
+  "hlx.player_connected_country": "[green][HLstatsX][default] El jugador [yellow]{0}[default] se ha conectado desde [yellow]{1}[default]!",
+  "hlx.new_player_connected_country": "[green][HLstatsX][default] ¡Nuevo jugador [yellow]{0}[default] se ha conectado desde [yellow]{1}[default]!"
 }

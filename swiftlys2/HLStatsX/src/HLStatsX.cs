@@ -146,6 +146,7 @@ public partial class HLStatsX : BasePlugin
         public int ReceiverPort { get; set; } = 27016;  // Must equal ServerPort+1; daemon sends HLX_CMD here
         public string MenuType { get; set; } = "CustomHud";
         public string CustomMenuLayout { get; set; } = "resources/panorama/layout/custom_game/hlx_menu.xml";
+        public string CustomCsayLayout { get; set; } = "resources/panorama/layout/custom_game/hlx_csay.xml";
         public int AutoCloseMenuSeconds { get; set; } = 15;
     }
 
@@ -155,6 +156,8 @@ public partial class HLStatsX : BasePlugin
     private readonly Dictionary<int, CCSCustomHudLayout> _playerHuds = new();
     private readonly HashSet<int> _activeHudPlayers = new();
     private readonly Dictionary<int, System.Threading.CancellationTokenSource> _menuCloseTimers = new();
+    private readonly Dictionary<int, CCSCustomHudLayout> _csayHuds = new();
+    private readonly Dictionary<int, System.Threading.CancellationTokenSource> _csayTimers = new();
     private string _protectAddress = "";
     private bool _blockChatCommands = true;
     private string _messagePrefix = "";
@@ -245,6 +248,7 @@ public partial class HLStatsX : BasePlugin
                     else if (key.Equals("ReceiverPort", StringComparison.OrdinalIgnoreCase) && int.TryParse(val, out int rp)) _config.ReceiverPort = rp;
                     else if (key.Equals("MenuType", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(val)) _config.MenuType = val;
                     else if (key.Equals("CustomMenuLayout", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(val)) _config.CustomMenuLayout = val;
+                    else if (key.Equals("CustomCsayLayout", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(val)) _config.CustomCsayLayout = val;
                     else if (key.Equals("AutoCloseMenuSeconds", StringComparison.OrdinalIgnoreCase) && int.TryParse(val, out int acs)) _config.AutoCloseMenuSeconds = acs;
                 }
             }
@@ -346,12 +350,67 @@ public partial class HLStatsX : BasePlugin
                 {
                     string target = parts[0];
                     string text = (parts.Length >= 3 ? parts[2] : parts[1]).Trim('"', '\'');
-                    var player = FindPlayerTarget(target);
-                    if (player != null && player.IsValid && !player.IsFakeClient)
-                        player.SendMessage(MessageType.Chat, FormatSourceModMessage(player, text));
-                    else if (target.Equals("0") || target.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+                    if (target.Equals("0") || target.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+                    {
                         foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
                             p.SendMessage(MessageType.Chat, FormatSourceModMessage(p, text));
+                    }
+                    else
+                    {
+                        foreach (var idStr in target.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                        {
+                            var player = FindPlayerTarget(idStr);
+                            if (player != null && player.IsValid && !player.IsFakeClient)
+                                player.SendMessage(MessageType.Chat, FormatSourceModMessage(player, text));
+                        }
+                    }
+                    return;
+                }
+            }
+            if (rawCmd.StartsWith("hlx_sm_csay ", StringComparison.OrdinalIgnoreCase))
+            {
+                string text = rawCmd.Substring(12).Trim().Trim('"', '\'');
+                ShowCenterHud(null, text, 4f);
+                return;
+            }
+            if (rawCmd.StartsWith("hlx_sm_tsay ", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = rawCmd.Substring(12).Trim().Split(' ', 3);
+                if (parts.Length >= 2)
+                {
+                    string target = parts[0];
+                    string text = (parts.Length >= 3 ? parts[2] : parts[1]).Trim('"', '\'');
+                    if (target.Equals("0") || target.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+                    {
+                        ShowCenterHud(null, text, 4f);
+                    }
+                    else
+                    {
+                        var player = FindPlayerTarget(target);
+                        if (player != null && player.IsValid && !player.IsFakeClient)
+                            ShowCenterHud(player, text, 4f);
+                    }
+                    return;
+                }
+            }
+            if (rawCmd.StartsWith("hlx_sm_hint ", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = rawCmd.Substring(12).Trim().Split(' ', 2);
+                if (parts.Length >= 2)
+                {
+                    string target = parts[0];
+                    string text = parts[1].Trim('"', '\'');
+                    if (target.Equals("0") || target.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+                    {
+                        foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
+                            p.SendMessage(MessageType.Alert, text);
+                    }
+                    else
+                    {
+                        var player = FindPlayerTarget(target);
+                        if (player != null && player.IsValid && !player.IsFakeClient)
+                            player.SendMessage(MessageType.Alert, text);
+                    }
                     return;
                 }
             }
@@ -586,29 +645,27 @@ public partial class HLStatsX : BasePlugin
         Core.Command.RegisterCommand("hlx_sm_csay", (context) =>
         {
             if (context.Args.Length < 1) return;
-            string message = string.Join(" ", context.Args);
-            foreach (var player in Core.PlayerManager.GetAllValidPlayers().Where(p => !p.IsFakeClient))
-                player.SendMessage(MessageType.Center, message);
+            string message = string.Join(" ", context.Args).Trim('"', '\'');
+            ShowCenterHud(null, message, 4f);
         }, registerRaw: true);
 
         Core.Command.RegisterCommand("hlx_sm_tsay", (context) =>
         {
             if (context.Args.Length < 2) return;
             string targetUserIdStr = context.Args.Length >= 3 ? context.Args[1] : context.Args[0];
-            string message = context.Args.Length >= 3
+            string message = (context.Args.Length >= 3
                 ? string.Join(" ", context.Args.Skip(2))
-                : string.Join(" ", context.Args.Skip(1));
+                : string.Join(" ", context.Args.Skip(1))).Trim('"', '\'');
 
             if (targetUserIdStr.Equals("0") || targetUserIdStr.Equals("ALL", StringComparison.OrdinalIgnoreCase))
             {
-                foreach (var player in Core.PlayerManager.GetAllValidPlayers().Where(p => !p.IsFakeClient))
-                    player.SendMessage(MessageType.Center, message);
+                ShowCenterHud(null, message, 4f);
             }
             else
             {
                 var player = FindPlayerTarget(targetUserIdStr);
                 if (player != null && player.IsValid && !player.IsFakeClient)
-                    player.SendMessage(MessageType.Center, message);
+                    ShowCenterHud(player, message, 4f);
             }
         }, registerRaw: true);
 
@@ -1066,6 +1123,7 @@ public partial class HLStatsX : BasePlugin
             };
             SendUdpLog($"\"{name}<{userid}><{steam3}><{team}>\" disconnected (reason \"{reason}\")");
             CloseCustomHud(player.PlayerID);
+            CloseCsayHud(player.PlayerID);
             return HookResult.Continue;
         });
 
@@ -1265,6 +1323,22 @@ public partial class HLStatsX : BasePlugin
         @"^(?<player>.+?)\s*is on rank\s*\(HIDDEN\)\s*of\s*(?<total>\d+)\s*with\s*(?<pts>[\d,]+)\s*(?:points|kills)!?$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    private static readonly Regex ConnectRankCountryRegex = new(
+        @"^(?<player>.+?)\s*\(Pos\s*(?<rank>\d+)\s*with\s*(?<pts>[\d,]+)\s*(?:points|kills)\)\s*has connected from\s*(?<country>.+)$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex ConnectRankRegex = new(
+        @"^(?<player>.+?)\s*\(Pos\s*(?<rank>\d+)\s*with\s*(?<pts>[\d,]+)\s*(?:points|kills)\)\s*has connected$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex NewConnectCountryRegex = new(
+        @"^New player\s+(?<player>.+?)\s+has connected from\s+(?<country>.+)$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex ConnectCountryRegex = new(
+        @"^Player\s+(?<player>.+?)\s+has connected from\s+(?<country>.+)$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     private string FormatSourceModMessage(IPlayer player, string rawMsg)
     {
         try
@@ -1272,7 +1346,39 @@ public partial class HLStatsX : BasePlugin
             if (string.IsNullOrWhiteSpace(rawMsg)) return "";
             var loc = Core.Translation.GetPlayerLocalizer(player);
 
-            var m = KillRewardRegex.Match(rawMsg);
+            var m = ConnectRankCountryRegex.Match(rawMsg);
+            if (m.Success)
+            {
+                string tmpl = loc["hlx.player_connected_rank_country"] ?? "[green][HLstatsX][default] [yellow]{0}[default] (Pos [lightred]#{1}[default] with [lime]{2}[default] points) has connected from [yellow]{3}[default]!";
+                string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), m.Groups["rank"].Value.Trim(), m.Groups["pts"].Value.Trim(), m.Groups["country"].Value.Trim());
+                return FormatColors(formatted);
+            }
+
+            m = ConnectRankRegex.Match(rawMsg);
+            if (m.Success)
+            {
+                string tmpl = loc["hlx.player_connected_rank"] ?? "[green][HLstatsX][default] [yellow]{0}[default] (Pos [lightred]#{1}[default] with [lime]{2}[default] points) has connected!";
+                string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), m.Groups["rank"].Value.Trim(), m.Groups["pts"].Value.Trim());
+                return FormatColors(formatted);
+            }
+
+            m = NewConnectCountryRegex.Match(rawMsg);
+            if (m.Success)
+            {
+                string tmpl = loc["hlx.new_player_connected_country"] ?? "[green][HLstatsX][default] New player [yellow]{0}[default] has connected from [yellow]{1}[default]!";
+                string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), m.Groups["country"].Value.Trim());
+                return FormatColors(formatted);
+            }
+
+            m = ConnectCountryRegex.Match(rawMsg);
+            if (m.Success)
+            {
+                string tmpl = loc["hlx.player_connected_country"] ?? "[green][HLstatsX][default] Player [yellow]{0}[default] has connected from [yellow]{1}[default]!";
+                string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), m.Groups["country"].Value.Trim());
+                return FormatColors(formatted);
+            }
+
+            m = KillRewardRegex.Match(rawMsg);
             if (m.Success)
             {
                 string tmpl = loc["hlx.kill_reward"] ?? "[green][HLstatsX][default] [yellow]{0}[default] ({1}) got [lime]+{2} points[default] for killing [yellow]{3}[default] ({4})!";
@@ -1383,10 +1489,110 @@ public partial class HLStatsX : BasePlugin
             }
             _playerHuds.Clear();
             _activeHudPlayers.Clear();
+
+            foreach (var kvp in _csayTimers)
+            {
+                try { kvp.Value?.Cancel(); } catch {}
+            }
+            _csayTimers.Clear();
+
+            foreach (var kvp in _csayHuds)
+            {
+                var hud = kvp.Value;
+                if (hud != null && hud.IsValid)
+                {
+                    SetHudClass(hud, "HlxCsayPanel", "Visible", false);
+                    hud.Despawn();
+                }
+            }
+            _csayHuds.Clear();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[HLstatsX:CE] CloseAllCustomHuds error: {ex.Message}");
+        }
+    }
+
+    private void CloseCsayHud(int playerId)
+    {
+        try
+        {
+            if (_csayTimers.TryGetValue(playerId, out var cts))
+            {
+                try { cts?.Cancel(); } catch {}
+                _csayTimers.Remove(playerId);
+            }
+
+            if (_csayHuds.TryGetValue(playerId, out var hud))
+            {
+                if (hud != null && hud.IsValid)
+                {
+                    SetHudClass(hud, "HlxCsayPanel", "Visible", false);
+                    hud.Despawn();
+                }
+                _csayHuds.Remove(playerId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HLstatsX:CE] CloseCsayHud error: {ex.Message}");
+        }
+    }
+
+    private void ShowCenterHud(IPlayer? target, string message, float duration = 4f)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return;
+
+        IEnumerable<IPlayer> recipients = target != null
+            ? (target.IsValid && !target.IsFakeClient ? new[] { target } : Array.Empty<IPlayer>())
+            : Core.PlayerManager.GetAllValidPlayers().Where(p => !p.IsFakeClient);
+
+        foreach (var player in recipients)
+        {
+            try
+            {
+                int playerId = player.PlayerID;
+                if (_csayTimers.TryGetValue(playerId, out var oldCts))
+                {
+                    try { oldCts?.Cancel(); } catch {}
+                    _csayTimers.Remove(playerId);
+                }
+
+                CCSCustomHudLayout hud;
+                if (_csayHuds.TryGetValue(playerId, out var existingHud) && existingHud != null && existingHud.IsValid)
+                {
+                    hud = existingHud;
+                }
+                else
+                {
+                    hud = Core.EntitySystem.CreateEntity<CCSCustomHudLayout>();
+                    hud.StrLayout = _config.CustomCsayLayout;
+                    hud.StrLayoutUpdated();
+                    hud.DispatchSpawn();
+
+                    hud.SetTransmitState(false);
+                    hud.SetTransmitState(true, playerId);
+                    _csayHuds[playerId] = hud;
+                }
+
+                hud.SetDialogVariableString("HlxCsayText", "csay_text", message);
+                SetHudClass(hud, "HlxCsayPanel", "Visible", true);
+
+                if (duration > 0)
+                {
+                    var cts = Core.Scheduler.DelayBySeconds(duration, () =>
+                    {
+                        CloseCsayHud(playerId);
+                    });
+                    _csayTimers[playerId] = cts;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[HLstatsX:CE] ShowCenterHud error: {ex.Message}");
+                // Fallback to chat or alert if HUD layout fails
+                try { player.SendMessage(MessageType.Alert, message); } catch {}
+            }
         }
     }
 
