@@ -14,6 +14,6 @@
   "hlx.top10_entry": "[lightred]#{0}[default] [yellow]{1}[default] - [lime]{2} pistettä[default] (K/D: {3})",
   "hlx.player_connected_rank_country": "[green][HLstatsX][default] [yellow]{0}[default] (Sija [lightred]#{1}[default], [lime]{2}[default] pistettä) yhdisti maasta [yellow]{3}[default]!",
   "hlx.player_connected_rank": "[green][HLstatsX][default] [yellow]{0}[default] (Sija [lightred]#{1}[default], [lime]{2}[default] pistettä) on yhdistänyt!",
-  "hlx.player_connected_country": "[green][HLstatsX][default] Pelaaja [yellow]{0}[default] yhdisti maasta [yellow]{3}[default]!",
+  "hlx.player_connected_country": "[green][HLstatsX][default] Pelaaja [yellow]{0}[default] yhdisti maasta [yellow]{1}[default]!",
   "hlx.new_player_connected_country": "[green][HLstatsX][default] Uusi pelaaja [yellow]{0}[default] yhdisti maasta [yellow]{1}[default]!"
 }

@@ -13,6 +13,9 @@
                 <Button id="HlxMenuOption05" class="HlxMenuOption"><Label id="HlxMenuOption05Label" text="{s:option_05}" /></Button>
                 <Button id="HlxMenuOption06" class="HlxMenuOption"><Label id="HlxMenuOption06Label" text="{s:option_06}" /></Button>
                 <Button id="HlxMenuOption07" class="HlxMenuOption"><Label id="HlxMenuOption07Label" text="{s:option_07}" /></Button>
+                <Button id="HlxMenuOption08" class="HlxMenuOption"><Label id="HlxMenuOption08Label" text="{s:option_08}" /></Button>
+                <Button id="HlxMenuOption09" class="HlxMenuOption"><Label id="HlxMenuOption09Label" text="{s:option_09}" /></Button>
+                <Button id="HlxMenuOption10" class="HlxMenuOption"><Label id="HlxMenuOption10Label" text="{s:option_10}" /></Button>
             </Panel>
             <Panel id="HlxMenuFooter" class="HlxMenuFooter">
                 <Button id="HlxMenuBack" class="HlxMenuFooterOption"><Label id="HlxMenuBackLabel" text="{s:back_text}" /></Button>

@@ -20,7 +20,7 @@ namespace HLStatsX;
 
 [PluginMetadata(
     Id = "HLStatsX",
-    Version = "1.1.4",
+    Version = "1.1.5",
     Name = "HLStatsX:CE Ingame Plugin (SwiftlyS2)",
     Author = "SyntX34",
     Description = "Provides CS2 in-game interaction and messaging with HLstatsX:CE daemon"
@@ -329,6 +329,29 @@ public partial class HLStatsX : BasePlugin
         }
     }
 
+    private void SendChatMessage(IPlayer player, string message)
+    {
+        if (player == null || !player.IsValid || player.IsFakeClient) return;
+        if (string.IsNullOrWhiteSpace(message)) return;
+
+        var lines = message.Replace("\r\n", "\n").Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+            if (string.IsNullOrEmpty(trimmed)) continue;
+            var formatted = FormatSourceModMessage(player, trimmed);
+            if (!string.IsNullOrWhiteSpace(formatted))
+                player.SendMessage(MessageType.Chat, formatted);
+        }
+    }
+
+    private void BroadcastChatMessage(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return;
+        foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
+            SendChatMessage(p, message);
+    }
+
     private void ExecuteDaemonCommand(string rawCmd)
     {
         try
@@ -336,34 +359,98 @@ public partial class HLStatsX : BasePlugin
             if (rawCmd.StartsWith("say ", StringComparison.OrdinalIgnoreCase))
             {
                 string text = rawCmd.Substring(4).Trim().Trim('"', '\'');
-                foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
-                    p.SendMessage(MessageType.Chat, FormatSourceModMessage(p, text));
+                BroadcastChatMessage(text);
                 return;
             }
             if (rawCmd.StartsWith("hlx_sm_msay ", StringComparison.OrdinalIgnoreCase))
             {
-                var parts = rawCmd.Substring(12).Trim().Split(' ', 3);
-                if (parts.Length >= 3)
+                // In SourceMod syntax: hlx_sm_msay <time> <userid> [need_handler] <message>
+                // Example: hlx_sm_msay "15" "7" "->1 - Total\n   Position 1 of 18\n..."
+                string msayPayload = rawCmd.Substring(12).Trim();
+                var tokens = new List<string>();
+                int pos = 0;
+                while (pos < msayPayload.Length && tokens.Count < 3)
                 {
-                    string target = parts[0];
-                    string text = parts[2].Trim('"', '\'').Replace("\\n", "\n");
-                    var player = FindPlayerTarget(target);
-                    if (player != null && player.IsValid && !player.IsFakeClient)
-                        player.SendMessage(MessageType.Chat, FormatSourceModMessage(player, text));
-                    else if (target.Equals("0") || target.Equals("ALL", StringComparison.OrdinalIgnoreCase))
-                        foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
-                            p.SendMessage(MessageType.Chat, FormatSourceModMessage(p, text));
-                    return;
+                    while (pos < msayPayload.Length && char.IsWhiteSpace(msayPayload[pos])) pos++;
+                    if (pos >= msayPayload.Length) break;
+                    if (msayPayload[pos] == '"' || msayPayload[pos] == '\'')
+                    {
+                        char q = msayPayload[pos++];
+                        int endQ = msayPayload.IndexOf(q, pos);
+                        if (endQ == -1)
+                        {
+                            tokens.Add(msayPayload.Substring(pos));
+                            pos = msayPayload.Length;
+                        }
+                        else
+                        {
+                            tokens.Add(msayPayload.Substring(pos, endQ - pos));
+                            pos = endQ + 1;
+                        }
+                    }
+                    else
+                    {
+                        int endSpace = msayPayload.IndexOf(' ', pos);
+                        if (endSpace == -1)
+                        {
+                            tokens.Add(msayPayload.Substring(pos));
+                            pos = msayPayload.Length;
+                        }
+                        else
+                        {
+                            tokens.Add(msayPayload.Substring(pos, endSpace - pos));
+                            pos = endSpace + 1;
+                        }
+                    }
                 }
+
+                while (pos < msayPayload.Length && char.IsWhiteSpace(msayPayload[pos])) pos++;
+                string message = pos < msayPayload.Length ? msayPayload.Substring(pos).Trim().Trim('"', '\'') : "";
+
+                // If tokens had 3 elements, check if the 3rd token was an optional need_handler flag (0 or 1)
+                string target = "";
+                if (tokens.Count >= 2)
+                {
+                    target = tokens[1]; // target is token 1 (time is token 0)
+                    if (tokens.Count == 3)
+                    {
+                        if (tokens[2] == "0" || tokens[2] == "1")
+                        {
+                            // tokens[2] was need_handler flag, message is what remains
+                        }
+                        else if (string.IsNullOrEmpty(message))
+                        {
+                            message = tokens[2];
+                        }
+                        else
+                        {
+                            message = tokens[2] + " " + message;
+                        }
+                    }
+                }
+                else if (tokens.Count == 1)
+                {
+                    target = tokens[0];
+                }
+
+                message = message.Replace("\\n", "\n");
+                var player = FindPlayerTarget(target);
+                if (player != null && player.IsValid && !player.IsFakeClient)
+                {
+                    SendChatMessage(player, message);
+                }
+                else if (target.Equals("0") || target.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+                {
+                    BroadcastChatMessage(message);
+                }
+                return;
             }
             if (rawCmd.StartsWith("hlx_sm_psay ", StringComparison.OrdinalIgnoreCase) || rawCmd.StartsWith("hlx_sm_psay2 ", StringComparison.OrdinalIgnoreCase))
             {
                 int prefixLen = rawCmd.StartsWith("hlx_sm_psay2 ", StringComparison.OrdinalIgnoreCase) ? 13 : 12;
                 string payload = rawCmd.Substring(prefixLen).Trim();
-                // If payload starts with a quote or does not contain multiple parameters, it's a broadcast to all
                 if (payload.StartsWith('"') || payload.StartsWith('\''))
                 {
-                    // Check if format is: "userid" [color] "message"
                     int secondQuote = payload.IndexOf(payload[0], 1);
                     if (secondQuote > 0 && secondQuote < payload.Length - 1)
                     {
@@ -371,13 +458,11 @@ public partial class HLStatsX : BasePlugin
                         string remainder = payload.Substring(secondQuote + 1).Trim();
                         if (possibleTarget.Equals("0") || possibleTarget.Equals("ALL", StringComparison.OrdinalIgnoreCase) || possibleTarget.Contains(',') || int.TryParse(possibleTarget, out _))
                         {
-                            // It's targeted: "7" [color] "message"
                             var remParts = remainder.Split(' ', 2);
                             string text = (remParts.Length >= 2 && int.TryParse(remParts[0], out _) ? remParts[1] : remainder).Trim('"', '\'');
                             if (possibleTarget.Equals("0") || possibleTarget.Equals("ALL", StringComparison.OrdinalIgnoreCase))
                             {
-                                foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
-                                    p.SendMessage(MessageType.Chat, FormatSourceModMessage(p, text));
+                                BroadcastChatMessage(text);
                             }
                             else
                             {
@@ -385,20 +470,17 @@ public partial class HLStatsX : BasePlugin
                                 {
                                     var player = FindPlayerTarget(idStr);
                                     if (player != null && player.IsValid && !player.IsFakeClient)
-                                        player.SendMessage(MessageType.Chat, FormatSourceModMessage(player, text));
+                                        SendChatMessage(player, text);
                                 }
                             }
                             return;
                         }
                     }
-                    // Otherwise it's a broadcast message in quotes e.g. hlx_sm_psay "HLstatsX:CE - Tracking 25 players..."
                     string broadcastText = payload.Trim('"', '\'');
-                    foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
-                        p.SendMessage(MessageType.Chat, FormatSourceModMessage(p, broadcastText));
+                    BroadcastChatMessage(broadcastText);
                     return;
                 }
 
-                // Format without leading quote: <target> [color] <message>
                 var parts = payload.Split(' ', 3);
                 if (parts.Length >= 2)
                 {
@@ -406,8 +488,7 @@ public partial class HLStatsX : BasePlugin
                     string text = (parts.Length >= 3 ? parts[2] : parts[1]).Trim('"', '\'');
                     if (target.Equals("0") || target.Equals("ALL", StringComparison.OrdinalIgnoreCase))
                     {
-                        foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
-                            p.SendMessage(MessageType.Chat, FormatSourceModMessage(p, text));
+                        BroadcastChatMessage(text);
                     }
                     else
                     {
@@ -415,7 +496,7 @@ public partial class HLStatsX : BasePlugin
                         {
                             var player = FindPlayerTarget(idStr);
                             if (player != null && player.IsValid && !player.IsFakeClient)
-                                player.SendMessage(MessageType.Chat, FormatSourceModMessage(player, text));
+                                SendChatMessage(player, text);
                         }
                     }
                     return;
@@ -423,8 +504,7 @@ public partial class HLStatsX : BasePlugin
                 else if (parts.Length == 1)
                 {
                     string text = parts[0].Trim('"', '\'');
-                    foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
-                        p.SendMessage(MessageType.Chat, FormatSourceModMessage(p, text));
+                    BroadcastChatMessage(text);
                     return;
                 }
             }
@@ -1443,6 +1523,18 @@ public partial class HLStatsX : BasePlugin
         @"Next ranked (?:player )?above you:\s*(?<player>.+?)\s*\(Rank\s*#?(?<rank>\d+)\s*with\s*(?<pts>[\d,]+)\s*points\)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    private static string CleanControlCodes(string str)
+    {
+        if (string.IsNullOrEmpty(str)) return "";
+        var sb = new StringBuilder(str.Length);
+        foreach (char c in str)
+        {
+            if (c >= 1 && c <= 16) continue;
+            sb.Append(c);
+        }
+        return sb.ToString().Trim();
+    }
+
     private string FormatSourceModMessage(IPlayer player, string rawMsg)
     {
         try
@@ -1450,7 +1542,19 @@ public partial class HLStatsX : BasePlugin
             if (string.IsNullOrWhiteSpace(rawMsg)) return "";
             var loc = Core.Translation.GetPlayerLocalizer(player);
 
-            var m = ConnectRankCountryRegex.Match(rawMsg);
+            string clean = CleanControlCodes(rawMsg);
+            if (clean.StartsWith("[") && clean.Contains("]"))
+            {
+                int closeIdx = clean.IndexOf(']');
+                if (closeIdx > 0 && closeIdx < clean.Length - 1)
+                {
+                    string candidate = clean.Substring(closeIdx + 1).Trim();
+                    if (!string.IsNullOrEmpty(candidate))
+                        clean = candidate;
+                }
+            }
+
+            var m = ConnectRankCountryRegex.Match(clean);
             if (m.Success)
             {
                 string tmpl = loc["hlx.player_connected_rank_country"] ?? "[green][HLstatsX][default] [yellow]{0}[default] (Pos [lightred]#{1}[default] with [lime]{2}[default] points) has connected from [yellow]{3}[default]!";
@@ -1458,7 +1562,7 @@ public partial class HLStatsX : BasePlugin
                 return FormatColors(formatted);
             }
 
-            m = ConnectRankRegex.Match(rawMsg);
+            m = ConnectRankRegex.Match(clean);
             if (m.Success)
             {
                 string tmpl = loc["hlx.player_connected_rank"] ?? "[green][HLstatsX][default] [yellow]{0}[default] (Pos [lightred]#{1}[default] with [lime]{2}[default] points) has connected!";
@@ -1466,7 +1570,7 @@ public partial class HLStatsX : BasePlugin
                 return FormatColors(formatted);
             }
 
-            m = NewConnectCountryRegex.Match(rawMsg);
+            m = NewConnectCountryRegex.Match(clean);
             if (m.Success)
             {
                 string tmpl = loc["hlx.new_player_connected_country"] ?? "[green][HLstatsX][default] New player [yellow]{0}[default] has connected from [yellow]{1}[default]!";
@@ -1474,7 +1578,7 @@ public partial class HLStatsX : BasePlugin
                 return FormatColors(formatted);
             }
 
-            m = ConnectCountryRegex.Match(rawMsg);
+            m = ConnectCountryRegex.Match(clean);
             if (m.Success)
             {
                 string tmpl = loc["hlx.player_connected_country"] ?? "[green][HLstatsX][default] Player [yellow]{0}[default] has connected from [yellow]{1}[default]!";
@@ -1482,7 +1586,7 @@ public partial class HLStatsX : BasePlugin
                 return FormatColors(formatted);
             }
 
-            m = KillRewardRegex.Match(rawMsg);
+            m = KillRewardRegex.Match(clean);
             if (m.Success)
             {
                 string tmpl = loc["hlx.kill_reward"] ?? "[green][HLstatsX][default] [yellow]{0}[default] ({1}) got [lime]+{2} points[default] for killing [yellow]{3}[default] ({4})!";
@@ -1490,7 +1594,7 @@ public partial class HLStatsX : BasePlugin
                 return FormatColors(formatted);
             }
 
-            m = KillRewardSimpleRegex.Match(rawMsg);
+            m = KillRewardSimpleRegex.Match(clean);
             if (m.Success)
             {
                 string tmpl = loc["hlx.kill_reward"] ?? "[green][HLstatsX][default] [yellow]{0}[default] ({1}) got [lime]+{2} points[default] for killing [yellow]{3}[default] ({4})!";
@@ -1498,7 +1602,7 @@ public partial class HLStatsX : BasePlugin
                 return FormatColors(formatted);
             }
 
-            m = TeamkillPenaltyRegex.Match(rawMsg);
+            m = TeamkillPenaltyRegex.Match(clean);
             if (m.Success)
             {
                 string tmpl = loc["hlx.teamkill_penalty"] ?? "[green][HLstatsX][default] [yellow]{0}[default] lost [red]-{1} points[default] ({2}) for team-killing!";
@@ -1506,7 +1610,7 @@ public partial class HLStatsX : BasePlugin
                 return FormatColors(formatted);
             }
 
-            m = ActionRewardRegex.Match(rawMsg);
+            m = ActionRewardRegex.Match(clean);
             if (m.Success)
             {
                 string verb = m.Groups["verb"].Value.ToLowerInvariant();
@@ -1518,7 +1622,7 @@ public partial class HLStatsX : BasePlugin
                 return FormatColors(formatted);
             }
 
-            m = RankMsgRegex.Match(rawMsg);
+            m = RankMsgRegex.Match(clean);
             if (m.Success)
             {
                 string tmpl = loc["hlx.rank"] ?? "[green][HLstatsX][default] [yellow]{0}[default] is on rank [lightred]#{1}[default] of [lightred]{2}[default] with [lightred]{3}[default] points!";
@@ -1526,7 +1630,7 @@ public partial class HLStatsX : BasePlugin
                 return FormatColors(formatted);
             }
 
-            m = RankHiddenMsgRegex.Match(rawMsg);
+            m = RankHiddenMsgRegex.Match(clean);
             if (m.Success)
             {
                 string tmpl = loc["hlx.rank_hidden"] ?? "[green][HLstatsX][default] [yellow]{0}[default] is on rank [grey](HIDDEN)[default] of [lightred]{1}[default] with [lightred]{2}[default] points!";
@@ -1534,7 +1638,7 @@ public partial class HLStatsX : BasePlugin
                 return FormatColors(formatted);
             }
 
-            m = KDeathMsgRegex.Match(rawMsg);
+            m = KDeathMsgRegex.Match(clean);
             if (m.Success)
             {
                 string tmpl = loc["hlx.kdeath"] ?? "[green][HLstatsX][default] [yellow]{0}[default] stats: [lime]{1} kills[default], [red]{2} deaths[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Acc: [yellow]{6}[default]%";
@@ -1543,7 +1647,7 @@ public partial class HLStatsX : BasePlugin
                 return FormatColors(formatted);
             }
 
-            m = SessionMsgRegex.Match(rawMsg);
+            m = SessionMsgRegex.Match(clean);
             if (m.Success)
             {
                 string tmpl = loc["hlx.session"] ?? "[green][HLstatsX][default] [yellow]{0}[default] session: [lime]{1} kills[default], [red]{2} deaths[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Acc: [yellow]{6}[default]%";
@@ -1555,7 +1659,7 @@ public partial class HLStatsX : BasePlugin
                 return FormatColors(formatted);
             }
 
-            m = NextMsgRegex.Match(rawMsg);
+            m = NextMsgRegex.Match(clean);
             if (m.Success)
             {
                 string tmpl = loc["hlx.next"] ?? "[green][HLstatsX][default] Next ranked above you: [yellow]{0}[default] (Rank #{1} with {2} points)";
@@ -1568,7 +1672,8 @@ public partial class HLStatsX : BasePlugin
             Console.WriteLine($"[HLstatsX:CE] FormatSourceModMessage error: {ex.Message}");
         }
 
-        return FormatColors($"{_messagePrefix}{rawMsg}");
+        string prefix = string.IsNullOrEmpty(_messagePrefix) ? "[green][HLstatsX][default] " : _messagePrefix;
+        return FormatColors($"{prefix}{rawMsg}");
     }
 
     private void CancelMenuAutoClose(int playerId)
