@@ -131,18 +131,18 @@ jobs:
             echo "---"
             echo
 
-            echo "## 📌 What's Changed"
-            echo
+            echo "| Commit | Change Description | Author |"
+            echo "| :---: | :--- | :--- |"
 
             if [ -n "$PREV_TAG" ]; then
               gh api repos/$REPO/compare/$PREV_TAG...HEAD \
                 --jq '.commits[] |
-                  "- \(.commit.message | split("\n")[0]) - **@" + (.author.login // .commit.author.name) + "**"'
+                  "| [`" + (.sha[0:7]) + "`](https://github.com/'"$REPO"'/commit/" + .sha + ") | " + (.commit.message | split("\n")[0] | gsub("\\|"; "\\|")) + " | **@" + (.author.login // .commit.author.name) + "** |"'
             else
               gh api repos/$REPO/commits \
                 --paginate \
                 --jq '.[] |
-                  "- \(.commit.message | split("\n")[0]) - **@" + (.author.login // .commit.author.name) + "**"'
+                  "| [`" + (.sha[0:7]) + "`](https://github.com/'"$REPO"'/commit/" + .sha + ") | " + (.commit.message | split("\n")[0] | gsub("\\|"; "\\|")) + " | **@" + (.author.login // .commit.author.name) + "** |"'
             fi
 
             echo
@@ -158,11 +158,11 @@ jobs:
                   [.commits[]
                   | (.author.login // .commit.author.name)]
                   | unique[]
-                  | "- @" + .
+                  | "- **@" + . + "**"
                 '
             else
               gh api repos/$REPO/contributors \
-                --jq '.[] | "- @" + .login'
+                --jq '.[] | "- **@" + .login + "**"'
             fi
 
             echo
@@ -173,7 +173,7 @@ jobs:
             echo
 
             for FILE in release-artifacts/*.zip; do
-              echo "- $(basename "$FILE")"
+              echo "- 📦 **$(basename "$FILE")**"
             done
 
             if [ -n "$PREV_TAG" ]; then
@@ -182,7 +182,7 @@ jobs:
               echo
               echo "## 🔗 Full Changelog"
               echo
-              echo "https://github.com/$REPO/compare/$PREV_TAG...$TAG"
+              echo "🔎 Compare changes: https://github.com/$REPO/compare/$PREV_TAG...$TAG"
             fi
 
           } > /tmp/release_notes.md
