@@ -7,8 +7,13 @@
   "hlx.points_lost": "[green][HLstatsX][default] Elvesztettél [red]-{0} pontot[default] ({1}) ezért: [yellow]{2}[default]!",
   "hlx.kill_reward": "[green][HLstatsX][default] [yellow]{0}[default] ({1}) kapott [lime]+{2} pontot[default] [yellow]{3}[default] ({4}) megöléséért!",
   "hlx.teamkill_penalty": "[green][HLstatsX][default] [yellow]{0}[default] elvesztett [red]-{1} pontot[default] ({2}) csapattárs megöléséért!",
+  "hlx.kdeath": "[green][HLstatsX][default] [yellow]{0}[default] statisztika: [lime]{1} ölés[default], [red]{2} halál[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Pontosság: [yellow]{6}[default]%",
   "hlx.session": "[green][HLstatsX][default] [yellow]{0}[default] munkamenet: [lime]{1} ölés[default], [red]{2} halál[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Pontosság: [yellow]{6}[default]%",
   "hlx.next": "[green][HLstatsX][default] Következő játékos előtted: [yellow]{0}[default] (Rang #{1} {2} ponttal)",
   "hlx.top10_header": "[green][HLstatsX][default] Top 10 játékos:",
-  "hlx.top10_entry": "[lightred]#{0}[default] [yellow]{1}[default] - [lime]{2} pont[default] (K/D: {3})"
+  "hlx.top10_entry": "[lightred]#{0}[default] [yellow]{1}[default] - [lime]{2} pont[default] (K/D: {3})",
+  "hlx.player_connected_rank_country": "[green][HLstatsX][default] [yellow]{0}[default] (Hely: [lightred]#{1}[default] [lime]{2}[default] ponttal) csatlakozott innen: [yellow]{3}[default]!",
+  "hlx.player_connected_rank": "[green][HLstatsX][default] [yellow]{0}[default] (Hely: [lightred]#{1}[default] [lime]{2}[default] ponttal) csatlakozott!",
+  "hlx.player_connected_country": "[green][HLstatsX][default] [yellow]{0}[default] játékos csatlakozott innen: [yellow]{1}[default]!",
+  "hlx.new_player_connected_country": "[green][HLstatsX][default] Új játékos [yellow]{0}[default] csatlakozott innen: [yellow]{1}[default]!"
 }

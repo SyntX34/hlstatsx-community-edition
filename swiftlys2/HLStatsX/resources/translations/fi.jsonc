@@ -7,8 +7,13 @@
   "hlx.points_lost": "[green][HLstatsX][default] Menetit [red]-{0} pistettä[default] ({1}) syystä [yellow]{2}[default]!",
   "hlx.kill_reward": "[green][HLstatsX][default] [yellow]{0}[default] ({1}) sai [lime]+{2} pistettä[default] pelaajan [yellow]{3}[default] ({4}) tappamisesta!",
   "hlx.teamkill_penalty": "[green][HLstatsX][default] [yellow]{0}[default] menetti [red]-{1} pistettä[default] ({2}) oman pelaajan tappamisesta!",
+  "hlx.kdeath": "[green][HLstatsX][default] Pelaajan [yellow]{0}[default] tilastot: [lime]{1} tappoa[default], [red]{2} kuolemaa[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Tarkkuus: [yellow]{6}[default]%",
   "hlx.session": "[green][HLstatsX][default] Pelaajan [yellow]{0}[default] sessio: [lime]{1} tappoa[default], [red]{2} kuolemaa[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Tarkkuus: [yellow]{6}[default]%",
   "hlx.next": "[green][HLstatsX][default] Seuraava pelaaja yläpuolellasi: [yellow]{0}[default] (Sija #{1}, {2} pistettä)",
   "hlx.top10_header": "[green][HLstatsX][default] Parhaat 10 Pelaajaa:",
-  "hlx.top10_entry": "[lightred]#{0}[default] [yellow]{1}[default] - [lime]{2} pistettä[default] (K/D: {3})"
+  "hlx.top10_entry": "[lightred]#{0}[default] [yellow]{1}[default] - [lime]{2} pistettä[default] (K/D: {3})",
+  "hlx.player_connected_rank_country": "[green][HLstatsX][default] [yellow]{0}[default] (Sija [lightred]#{1}[default], [lime]{2}[default] pistettä) yhdisti maasta [yellow]{3}[default]!",
+  "hlx.player_connected_rank": "[green][HLstatsX][default] [yellow]{0}[default] (Sija [lightred]#{1}[default], [lime]{2}[default] pistettä) on yhdistänyt!",
+  "hlx.player_connected_country": "[green][HLstatsX][default] Pelaaja [yellow]{0}[default] yhdisti maasta [yellow]{3}[default]!",
+  "hlx.new_player_connected_country": "[green][HLstatsX][default] Uusi pelaaja [yellow]{0}[default] yhdisti maasta [yellow]{1}[default]!"
 }

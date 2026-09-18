@@ -7,6 +7,7 @@
   "hlx.points_lost": "[green][HLstatsX][default] Du [red]mistet -{0} poeng[default] ({1}) for [yellow]{2}[default]!",
   "hlx.kill_reward": "[green][HLstatsX][default] [yellow]{0}[default] ({1}) fikk [lime]+{2} poeng[default] for å drepe [yellow]{3}[default] ({4})!",
   "hlx.teamkill_penalty": "[green][HLstatsX][default] [yellow]{0}[default] mistet [red]-{1} poeng[default] ({2}) for lagdrap!",
+  "hlx.kdeath": "[green][HLstatsX][default] [yellow]{0}[default] statistikk: [lime]{1} drap[default], [red]{2} dødsfall[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Treffsikkerhet: [yellow]{6}[default]%",
   "hlx.session": "[green][HLstatsX][default] [yellow]{0}[default] økt: [lime]{1} drap[default], [red]{2} dødsfall[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Treffsikkerhet: [yellow]{6}[default]%",
   "hlx.next": "[green][HLstatsX][default] Neste spiller foran deg: [yellow]{0}[default] (Rang #{1} med {2} poeng)",
   "hlx.top10_header": "[green][HLstatsX][default] Topp 10 spillere:",

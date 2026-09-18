@@ -9,4 +9,5 @@ ReceiverPort = 27016
 MenuType = "CustomHud"
 CustomMenuLayout = "resources/panorama/layout/custom_game/hlx_menu.xml"
 CustomCsayLayout = "resources/panorama/layout/custom_game/hlx_csay.xml"
+CustomTsayLayout = "resources/panorama/layout/custom_game/hlx_tsay.xml"
 AutoCloseMenuSeconds = 15

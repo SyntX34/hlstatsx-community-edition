@@ -7,8 +7,13 @@
   "hlx.points_lost": "[green][HLstatsX][default] Du [red]mistede -{0} point[default] ({1}) for [yellow]{2}[default]!",
   "hlx.kill_reward": "[green][HLstatsX][default] [yellow]{0}[default] ({1}) fik [lime]+{2} point[default] for at dræbe [yellow]{3}[default] ({4})!",
   "hlx.teamkill_penalty": "[green][HLstatsX][default] [yellow]{0}[default] mistede [red]-{1} point[default] ({2}) for holddrab!",
+  "hlx.kdeath": "[green][HLstatsX][default] [yellow]{0}[default] stats: [lime]{1} drab[default], [red]{2} dødsfald[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Præcision: [yellow]{6}[default]%",
   "hlx.session": "[green][HLstatsX][default] [yellow]{0}[default] session: [lime]{1} drab[default], [red]{2} dødsfald[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Præcision: [yellow]{6}[default]%",
   "hlx.next": "[green][HLstatsX][default] Næste spiller over dig: [yellow]{0}[default] (Rang #{1} med {2} point)",
   "hlx.top10_header": "[green][HLstatsX][default] Top 10 spillere:",
-  "hlx.top10_entry": "[lightred]#{0}[default] [yellow]{1}[default] - [lime]{2} point[default] (K/D: {3})"
+  "hlx.top10_entry": "[lightred]#{0}[default] [yellow]{1}[default] - [lime]{2} point[default] (K/D: {3})",
+  "hlx.player_connected_rank_country": "[green][HLstatsX][default] [yellow]{0}[default] (Pos [lightred]#{1}[default] med [lime]{2}[default] point) har tilsluttet fra [yellow]{3}[default]!",
+  "hlx.player_connected_rank": "[green][HLstatsX][default] [yellow]{0}[default] (Pos [lightred]#{1}[default] med [lime]{2}[default] point) har tilsluttet!",
+  "hlx.player_connected_country": "[green][HLstatsX][default] Spiller [yellow]{0}[default] har tilsluttet fra [yellow]{1}[default]!",
+  "hlx.new_player_connected_country": "[green][HLstatsX][default] Ny spiller [yellow]{0}[default] har tilsluttet fra [yellow]{1}[default]!"
 }

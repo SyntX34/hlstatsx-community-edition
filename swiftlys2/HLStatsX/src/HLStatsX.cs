@@ -20,7 +20,7 @@ namespace HLStatsX;
 
 [PluginMetadata(
     Id = "HLStatsX",
-    Version = "1.1.2",
+    Version = "1.1.3",
     Name = "HLStatsX:CE Ingame Plugin (SwiftlyS2)",
     Author = "SyntX34",
     Description = "Provides CS2 in-game interaction and messaging with HLstatsX:CE daemon"
@@ -147,6 +147,7 @@ public partial class HLStatsX : BasePlugin
         public string MenuType { get; set; } = "CustomHud";
         public string CustomMenuLayout { get; set; } = "resources/panorama/layout/custom_game/hlx_menu.xml";
         public string CustomCsayLayout { get; set; } = "resources/panorama/layout/custom_game/hlx_csay.xml";
+        public string CustomTsayLayout { get; set; } = "resources/panorama/layout/custom_game/hlx_tsay.xml";
         public int AutoCloseMenuSeconds { get; set; } = 15;
     }
 
@@ -158,6 +159,8 @@ public partial class HLStatsX : BasePlugin
     private readonly Dictionary<int, System.Threading.CancellationTokenSource> _menuCloseTimers = new();
     private readonly Dictionary<int, CCSCustomHudLayout> _csayHuds = new();
     private readonly Dictionary<int, System.Threading.CancellationTokenSource> _csayTimers = new();
+    private readonly Dictionary<int, CCSCustomHudLayout> _tsayHuds = new();
+    private readonly Dictionary<int, System.Threading.CancellationTokenSource> _tsayTimers = new();
     private string _protectAddress = "";
     private bool _blockChatCommands = true;
     private string _messagePrefix = "";
@@ -249,6 +252,7 @@ public partial class HLStatsX : BasePlugin
                     else if (key.Equals("MenuType", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(val)) _config.MenuType = val;
                     else if (key.Equals("CustomMenuLayout", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(val)) _config.CustomMenuLayout = val;
                     else if (key.Equals("CustomCsayLayout", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(val)) _config.CustomCsayLayout = val;
+                    else if (key.Equals("CustomTsayLayout", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(val)) _config.CustomTsayLayout = val;
                     else if (key.Equals("AutoCloseMenuSeconds", StringComparison.OrdinalIgnoreCase) && int.TryParse(val, out int acs)) _config.AutoCloseMenuSeconds = acs;
                 }
             }
@@ -382,13 +386,13 @@ public partial class HLStatsX : BasePlugin
                     string text = (parts.Length >= 3 ? parts[2] : parts[1]).Trim('"', '\'');
                     if (target.Equals("0") || target.Equals("ALL", StringComparison.OrdinalIgnoreCase))
                     {
-                        ShowCenterHud(null, text, 4f);
+                        ShowTopLeftHud(null, text, 4f);
                     }
                     else
                     {
                         var player = FindPlayerTarget(target);
                         if (player != null && player.IsValid && !player.IsFakeClient)
-                            ShowCenterHud(player, text, 4f);
+                            ShowTopLeftHud(player, text, 4f);
                     }
                     return;
                 }
@@ -659,13 +663,13 @@ public partial class HLStatsX : BasePlugin
 
             if (targetUserIdStr.Equals("0") || targetUserIdStr.Equals("ALL", StringComparison.OrdinalIgnoreCase))
             {
-                ShowCenterHud(null, message, 4f);
+                ShowTopLeftHud(null, message, 4f);
             }
             else
             {
                 var player = FindPlayerTarget(targetUserIdStr);
                 if (player != null && player.IsValid && !player.IsFakeClient)
-                    ShowCenterHud(player, message, 4f);
+                    ShowTopLeftHud(player, message, 4f);
             }
         }, registerRaw: true);
 
@@ -772,6 +776,8 @@ public partial class HLStatsX : BasePlugin
                 string arg = context.Args.Length > 0 ? " " + string.Join(" ", context.Args) : "";
                 SendLog(player, $"{name}{arg}", "say");
             }, registerRaw: true);
+            try { Core.Command.RegisterCommandAlias(name, $"!{name}"); } catch {}
+            try { Core.Command.RegisterCommandAlias(name, $"/{name}"); } catch {}
         }
 
         RegisterPlayerStatsCommand("rank");
@@ -823,7 +829,7 @@ public partial class HLStatsX : BasePlugin
                 if (BlockedCommands.Contains(cmd))
                 {
                     string verb = @event.TeamOnly ? "say_team" : "say";
-                    SendLog(player, text, verb);
+                    SendLog(player, cleaned, verb);
                     if (_blockChatCommands) return HookResult.Handled;
                     return HookResult.Continue;
                 }
@@ -1339,6 +1345,18 @@ public partial class HLStatsX : BasePlugin
         @"^Player\s+(?<player>.+?)\s+has connected from\s+(?<country>.+)$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    private static readonly Regex KDeathMsgRegex = new(
+        @"^(?<player>.+?)\s+has\s+(?<kills>\d+):(?<deaths>\d+)\s+frags,\s+(?<hs>\d+)\s+headshots\s*\((?<hpk>[\d.]+)%\),(?:\s*(?<acc>[\d.]+)%?\s*accuracy,)?\s*and a KD-Ratio of\s*(?<kd>[\d.]+)$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex SessionMsgRegex = new(
+        @"^(?<player>.+?)\s+has\s+(?<kills>\d+):(?<deaths>\d+)\s+frags(?:\s*\((?<ratio>[\d.]+)%\))?,\s+(?<hs>\d+)\s+headshots\s*\((?<hpk>[\d.]+)%\),(?:\s*(?<acc>[\d.]+)%?\s*accuracy,)?(?:\s*and a skill change of\s*(?<pts>[+-]?\d+)\s*points)?$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex NextMsgRegex = new(
+        @"^Next ranked (?:player )?above you:\s*(?<player>.+?)\s*\(Rank\s*#?(?<rank>\d+)\s*with\s*(?<pts>[\d,]+)\s*points\)$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     private string FormatSourceModMessage(IPlayer player, string rawMsg)
     {
         try
@@ -1429,6 +1447,35 @@ public partial class HLStatsX : BasePlugin
                 string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), m.Groups["total"].Value.Trim(), m.Groups["pts"].Value.Trim());
                 return FormatColors(formatted);
             }
+
+            m = KDeathMsgRegex.Match(rawMsg);
+            if (m.Success)
+            {
+                string tmpl = loc["hlx.kdeath"] ?? "[green][HLstatsX][default] [yellow]{0}[default] stats: [lime]{1} kills[default], [red]{2} deaths[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Acc: [yellow]{6}[default]%";
+                string acc = string.IsNullOrWhiteSpace(m.Groups["acc"].Value) ? "0.0" : m.Groups["acc"].Value.Trim();
+                string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), m.Groups["kills"].Value.Trim(), m.Groups["deaths"].Value.Trim(), m.Groups["kd"].Value.Trim(), m.Groups["hs"].Value.Trim(), m.Groups["hpk"].Value.Trim(), acc);
+                return FormatColors(formatted);
+            }
+
+            m = SessionMsgRegex.Match(rawMsg);
+            if (m.Success)
+            {
+                string tmpl = loc["hlx.session"] ?? "[green][HLstatsX][default] [yellow]{0}[default] session: [lime]{1} kills[default], [red]{2} deaths[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Acc: [yellow]{6}[default]%";
+                string kills = m.Groups["kills"].Value.Trim();
+                string deaths = m.Groups["deaths"].Value.Trim();
+                string kd = double.TryParse(kills, out double k) && double.TryParse(deaths, out double d) && d > 0 ? (k / d).ToString("F2") : kills;
+                string acc = string.IsNullOrWhiteSpace(m.Groups["acc"].Value) ? "0.0" : m.Groups["acc"].Value.Trim();
+                string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), kills, deaths, kd, m.Groups["hs"].Value.Trim(), m.Groups["hpk"].Value.Trim(), acc);
+                return FormatColors(formatted);
+            }
+
+            m = NextMsgRegex.Match(rawMsg);
+            if (m.Success)
+            {
+                string tmpl = loc["hlx.next"] ?? "[green][HLstatsX][default] Next ranked above you: [yellow]{0}[default] (Rank #{1} with {2} points)";
+                string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), m.Groups["rank"].Value.Trim(), m.Groups["pts"].Value.Trim());
+                return FormatColors(formatted);
+            }
         }
         catch (Exception ex)
         {
@@ -1506,6 +1553,23 @@ public partial class HLStatsX : BasePlugin
                 }
             }
             _csayHuds.Clear();
+
+            foreach (var kvp in _tsayTimers)
+            {
+                try { kvp.Value?.Cancel(); } catch {}
+            }
+            _tsayTimers.Clear();
+
+            foreach (var kvp in _tsayHuds)
+            {
+                var hud = kvp.Value;
+                if (hud != null && hud.IsValid)
+                {
+                    SetHudClass(hud, "HlxTsayPanel", "Visible", false);
+                    hud.Despawn();
+                }
+            }
+            _tsayHuds.Clear();
         }
         catch (Exception ex)
         {
@@ -1536,6 +1600,32 @@ public partial class HLStatsX : BasePlugin
         catch (Exception ex)
         {
             Console.WriteLine($"[HLstatsX:CE] CloseCsayHud error: {ex.Message}");
+        }
+    }
+
+    private void CloseTsayHud(int playerId)
+    {
+        try
+        {
+            if (_tsayTimers.TryGetValue(playerId, out var cts))
+            {
+                try { cts?.Cancel(); } catch {}
+                _tsayTimers.Remove(playerId);
+            }
+
+            if (_tsayHuds.TryGetValue(playerId, out var hud))
+            {
+                if (hud != null && hud.IsValid)
+                {
+                    SetHudClass(hud, "HlxTsayPanel", "Visible", false);
+                    hud.Despawn();
+                }
+                _tsayHuds.Remove(playerId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HLstatsX:CE] CloseTsayHud error: {ex.Message}");
         }
     }
 
@@ -1590,6 +1680,63 @@ public partial class HLStatsX : BasePlugin
             catch (Exception ex)
             {
                 Console.WriteLine($"[HLstatsX:CE] ShowCenterHud error: {ex.Message}");
+                // Fallback to chat or alert if HUD layout fails
+                try { player.SendMessage(MessageType.Alert, message); } catch {}
+            }
+        }
+    }
+
+    private void ShowTopLeftHud(IPlayer? target, string message, float duration = 4f)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return;
+
+        IEnumerable<IPlayer> recipients = target != null
+            ? (target.IsValid && !target.IsFakeClient ? new[] { target } : Array.Empty<IPlayer>())
+            : Core.PlayerManager.GetAllValidPlayers().Where(p => !p.IsFakeClient);
+
+        foreach (var player in recipients)
+        {
+            try
+            {
+                int playerId = player.PlayerID;
+                if (_tsayTimers.TryGetValue(playerId, out var oldCts))
+                {
+                    try { oldCts?.Cancel(); } catch {}
+                    _tsayTimers.Remove(playerId);
+                }
+
+                CCSCustomHudLayout hud;
+                if (_tsayHuds.TryGetValue(playerId, out var existingHud) && existingHud != null && existingHud.IsValid)
+                {
+                    hud = existingHud;
+                }
+                else
+                {
+                    hud = Core.EntitySystem.CreateEntity<CCSCustomHudLayout>();
+                    hud.StrLayout = _config.CustomTsayLayout;
+                    hud.StrLayoutUpdated();
+                    hud.DispatchSpawn();
+
+                    hud.SetTransmitState(false);
+                    hud.SetTransmitState(true, playerId);
+                    _tsayHuds[playerId] = hud;
+                }
+
+                hud.SetDialogVariableString("HlxTsayText", "tsay_text", message);
+                SetHudClass(hud, "HlxTsayPanel", "Visible", true);
+
+                if (duration > 0)
+                {
+                    var cts = Core.Scheduler.DelayBySeconds(duration, () =>
+                    {
+                        CloseTsayHud(playerId);
+                    });
+                    _tsayTimers[playerId] = cts;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[HLstatsX:CE] ShowTopLeftHud error: {ex.Message}");
                 // Fallback to chat or alert if HUD layout fails
                 try { player.SendMessage(MessageType.Alert, message); } catch {}
             }

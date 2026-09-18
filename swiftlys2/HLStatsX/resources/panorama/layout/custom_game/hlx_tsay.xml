@@ -1,0 +1,10 @@
+<root>
+    <styles>
+        <include src="s2r://panorama/styles/custom_game/hlx_tsay.vcss_c" />
+    </styles>
+    <Panel class="HlxTsayRoot" hittest="false">
+        <Panel id="HlxTsayPanel" class="HlxTsayPanel TopLeft" hittest="false">
+            <Label id="HlxTsayText" class="HlxTsayText" text="{s:tsay_text}" hittest="false" />
+        </Panel>
+    </Panel>
+</root>
