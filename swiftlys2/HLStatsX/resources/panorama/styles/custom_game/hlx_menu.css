@@ -2,6 +2,7 @@
     width: 100%;
     height: 100%;
     flow-children: none;
+    hittest: false;
 }
 
 .HlxMenuPanel {
@@ -108,6 +109,21 @@
     text-overflow: shrink;
 }
 
+.HlxMenuOption.Interactive {
+    hittest: true;
+}
+
+.HlxMenuOption.Interactive:hover {
+    background-color: rgba(255, 184, 77, 0.45);
+    color: #ffffff;
+    transform: translateX(4px);
+}
+
+.HlxMenuOption.Disabled,
+.HlxMenuOption.Spacer {
+    hittest: false;
+}
+
 .HlxMenuOption.Disabled {
     color: #717e8c;
     opacity: 0.75;
@@ -157,6 +173,16 @@
     transition-property: color, opacity, background-color, transform;
     transition-duration: 0.08s, 0.12s, 0.08s, 0.08s;
     transition-timing-function: ease-in-out;
+}
+
+.HlxMenuFooterOption.Interactive {
+    hittest: true;
+}
+
+.HlxMenuFooterOption.Interactive:hover {
+    background-color: rgba(99, 157, 255, 0.45);
+    color: #ffffff;
+    transform: translateX(4px);
 }
 
 .HlxMenuFooterOption Label {

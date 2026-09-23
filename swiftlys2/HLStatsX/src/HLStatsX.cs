@@ -784,9 +784,13 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
 
         if (int.TryParse(token, out int uid))
         {
+            // hlstats daemon passes engine userid (e.g. 7 from "Name<7><...>")
+            var matchUserId = Core.PlayerManager.GetAllValidPlayers().FirstOrDefault(x => x.UserID == uid);
+            if (matchUserId != null) return matchUserId;
+
             var p = Core.PlayerManager.GetPlayer(uid);
             if (p != null && p.IsValid) return p;
-            return Core.PlayerManager.GetAllValidPlayers().FirstOrDefault(x => x.UserID == uid || x.Slot == uid);
+            return Core.PlayerManager.GetAllValidPlayers().FirstOrDefault(x => x.Slot == uid);
         }
 
         if (ulong.TryParse(token, out ulong sid64) && sid64 > 76561197960265728UL)
@@ -2218,28 +2222,30 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
         OpenBuiltinMenu(player);
     }
 
+    private CCSCustomHudLayout EnsureCustomHud(int playerId)
+    {
+        if (_playerHuds.TryGetValue(playerId, out var existing) && existing != null && existing.IsValid)
+        {
+            existing.SetTransmitState(true, playerId);
+            return existing;
+        }
+
+        var hud = Core.EntitySystem.CreateEntity<CCSCustomHudLayout>();
+        hud.StrLayout = _config.CustomMenuLayout;
+        hud.StrLayoutUpdated();
+        hud.DispatchSpawn();
+        hud.SetTransmitState(false);
+        hud.SetTransmitState(true, playerId);
+        _playerHuds[playerId] = hud;
+        return hud;
+    }
+
     private void OpenCustomHudMenu(IPlayer player)
     {
         try
         {
             int playerId = player.PlayerID;
-            CCSCustomHudLayout hud;
-
-            if (_playerHuds.TryGetValue(playerId, out var existingHud) && existingHud != null && existingHud.IsValid)
-            {
-                hud = existingHud;
-            }
-            else
-            {
-                hud = Core.EntitySystem.CreateEntity<CCSCustomHudLayout>();
-                hud.StrLayout = _config.CustomMenuLayout;
-                hud.StrLayoutUpdated();
-                hud.DispatchSpawn();
-
-                hud.SetTransmitState(false);
-                hud.SetTransmitState(true, playerId);
-                _playerHuds[playerId] = hud;
-            }
+            var hud = EnsureCustomHud(playerId);
 
             var loc = Core.Translation.GetPlayerLocalizer(player);
             string title = loc["hlx.menu_title"] ?? "► HLstatsX:CE Stats";
@@ -2546,23 +2552,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
         try
         {
             int playerId = player.PlayerID;
-            CCSCustomHudLayout hud;
-
-            if (_playerHuds.TryGetValue(playerId, out var existingHud) && existingHud != null && existingHud.IsValid)
-            {
-                hud = existingHud;
-            }
-            else
-            {
-                hud = Core.EntitySystem.CreateEntity<CCSCustomHudLayout>();
-                hud.StrLayout = _config.CustomMenuLayout;
-                hud.StrLayoutUpdated();
-                hud.DispatchSpawn();
-
-                hud.SetTransmitState(false);
-                hud.SetTransmitState(true, playerId);
-                _playerHuds[playerId] = hud;
-            }
+            var hud = EnsureCustomHud(playerId);
 
             var rawLines = rawMessage.Replace("\r\n", "\n").Split('\n');
             string title = "► HLstatsX:CE Stats";
