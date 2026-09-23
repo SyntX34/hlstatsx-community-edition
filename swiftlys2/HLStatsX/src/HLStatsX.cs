@@ -22,7 +22,7 @@ namespace HLStatsX;
 
 [PluginMetadata(
     Id = "HLStatsX",
-    Version = "1.1.7",
+    Version = "1.1.8",
     Name = "HLStatsX:CE Ingame Plugin (SwiftlyS2)",
     Author = "SyntX34",
     Description = "Provides CS2 in-game interaction and messaging with HLstatsX:CE daemon"
@@ -194,6 +194,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
     private UdpClient? _udpClient;
     private UdpClient? _udpReceiver;
     private System.Threading.CancellationTokenSource? _udpCts;
+    private Guid _chatHookGuid = Guid.Empty;
 
     private readonly HashSet<string> _interactingPlugins = new(StringComparer.OrdinalIgnoreCase);
 
@@ -358,7 +359,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
         StartUdpReceiver();
         RegisterServerCommands();
         RegisterGameEvents();
-        SendUdpLog($"server_cvar: \"maxplayers\" \"{_config.MaxPlayers}\"");
+        SendServerCvars();
         foreach (var player in Core.PlayerManager.GetAllValidPlayers())
         {
             SendPlayerConnectLogs(player);
@@ -380,6 +381,11 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
     {
         try { _udpCts?.Cancel(); _udpCts?.Dispose(); _udpCts = null; } catch {}
         try { _udpReceiver?.Close(); _udpReceiver?.Dispose(); _udpReceiver = null; } catch {}
+        if (_chatHookGuid != Guid.Empty)
+        {
+            try { Core.Command.UnhookClientChat(_chatHookGuid); } catch {}
+            _chatHookGuid = Guid.Empty;
+        }
         CloseAllCustomHuds();
         _udpClient?.Close();
         _udpClient = null;
@@ -739,6 +745,22 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
         return $"\"{name}<{userid}><{steam3}><{team}>\"";
     }
 
+    private void SendServerCvars()
+    {
+        SendUdpLog($"server_cvar: \"maxplayers\" \"{_config.MaxPlayers}\"");
+        SendUdpLog($"server_cvar: \"sv_visiblemaxplayers\" \"{_config.MaxPlayers}\"");
+        try
+        {
+            var conVar = Core.ConVar.Find<string>("hostname");
+            if (conVar != null && !string.IsNullOrWhiteSpace(conVar.Value))
+                SendUdpLog($"server_cvar: \"hostname\" \"{conVar.Value}\"");
+        }
+        catch {
+            // Is Denied GAY?!
+            // nothing here.
+        }
+    }
+
     private void SendLog(IPlayer? player, string message, string? verb)
     {
         if (player != null && player.IsValid && !string.IsNullOrWhiteSpace(verb))
@@ -1071,18 +1093,24 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
 
     private void RegisterGameEvents()
     {
-        Core.GameEvent.HookPre<EventPlayerChat>((@event) =>
+        if (_chatHookGuid != Guid.Empty)
         {
-            var player = @event.UserIdPlayer;
+            try { Core.Command.UnhookClientChat(_chatHookGuid); } catch {}
+            _chatHookGuid = Guid.Empty;
+        }
+
+        _chatHookGuid = Core.Command.HookClientChat((playerId, text, teamOnly) =>
+        {
+            if (string.IsNullOrWhiteSpace(text)) return HookResult.Continue;
+            var player = Core.PlayerManager.GetPlayer(playerId);
             if (player == null || !player.IsValid) return HookResult.Continue;
 
-            string text = @event.Text?.Trim() ?? "";
-            if (string.IsNullOrEmpty(text)) return HookResult.Continue;
+            var trimmedText = text.Trim();
 
             // Silently ignore slash commands, do not forward to daemon or process
-            if (text.StartsWith('/')) return HookResult.Continue;
+            if (trimmedText.StartsWith('/')) return HookResult.Continue;
 
-            string cleaned = text;
+            string cleaned = trimmedText;
             if (cleaned.StartsWith('!'))
                 cleaned = cleaned.Substring(1).Trim();
 
@@ -1098,15 +1126,15 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
 
                 if (IsStatCommand(cmd))
                 {
-                    string verb = @event.TeamOnly ? "say_team" : "say";
+                    string verb = teamOnly ? "say_team" : "say";
                     SendLog(player, cleaned, verb);
                     if (_blockChatCommands) return HookResult.Handled;
                     return HookResult.Continue;
                 }
             }
 
-            string chatVerb = @event.TeamOnly ? "say_team" : "say";
-            SendLog(player, text, chatVerb);
+            string chatVerb = teamOnly ? "say_team" : "say";
+            SendLog(player, trimmedText, chatVerb);
             return HookResult.Continue;
         });
 
@@ -1206,6 +1234,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
 
         Core.GameEvent.HookPost<EventRoundStart>((@event) =>
         {
+            _playerStreak.Clear();
             SendUdpLog("World triggered \"Round_Start\"");
             return HookResult.Continue;
         });
@@ -1386,6 +1415,8 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
         {
             var player = @event.UserIdPlayer;
             if (player == null || !player.IsValid) return HookResult.Continue;
+            if (player.SteamID > 0)
+                _playerStreak.Remove(player.SteamID);
             FlushPlayerWeaponStats(player);
             var name   = player.Name.Replace('"', '\'');
             var userid = player.UserID;
@@ -1405,12 +1436,13 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
 
         Core.Event.OnMapLoad += (@event) =>
         {
+            _playerStreak.Clear();
             CloseAllCustomHuds();
             var rawMap = @event.MapName ?? "";
             var mapName = rawMap.Contains('/')
                 ? rawMap.Substring(rawMap.LastIndexOf('/') + 1)
                 : rawMap;
-            SendUdpLog($"server_cvar: \"maxplayers\" \"{_config.MaxPlayers}\"");
+            SendServerCvars();
             SendUdpLog($"Loading map \"{mapName}\"");
             SendUdpLog($"Started map \"{mapName}\" (CRC \"-1\")");
         };
@@ -1515,19 +1547,28 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
                             SendUdpLog($"{FormatPlayerString(attacker)} triggered \"kill_streak_{curStreak}\"");
                             if (curStreak >= 3)
                             {
-                                string streakAnnounce = FormatColors(string.Format(
-                                    "[green][HLstatsX][default] [green]{0}[default] is on a [green]{1}[default] streak ({2} kills)!",
-                                    attacker.Name, matchedMilestone.Name, curStreak));
-                                BroadcastChatMessage(streakAnnounce);
+                                string streakName = matchedMilestone.Name;
+                                int kills = curStreak;
+                                string attackerName = attacker.Name;
+                                foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
+                                {
+                                    var loc = Core.Translation.GetPlayerLocalizer(p);
+                                    string tmpl = loc["hlx.streak"] ?? "[red][HLstatsX][default] [green]{0}[default] is on a [green]{1}[default] streak ({2} kills)!";
+                                    p.SendMessage(MessageType.Chat, FormatColors(string.Format(tmpl, attackerName, streakName, kills)));
+                                }
                             }
                         }
                         else if (curStreak > 12)
                         {
                             SendUdpLog($"{FormatPlayerString(attacker)} triggered \"kill_streak_12\"");
-                            string streakAnnounce = FormatColors(string.Format(
-                                "[green][HLstatsX][default] [green]{0}[default] is on a [green]God Like[default] streak ({1} kills)!",
-                                attacker.Name, curStreak));
-                            BroadcastChatMessage(streakAnnounce);
+                            int kills = curStreak;
+                            string attackerName = attacker.Name;
+                            foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
+                            {
+                                var loc = Core.Translation.GetPlayerLocalizer(p);
+                                string tmpl = loc["hlx.streak"] ?? "[red][HLstatsX][default] [green]{0}[default] is on a [green]{1}[default] streak ({2} kills)!";
+                                p.SendMessage(MessageType.Chat, FormatColors(string.Format(tmpl, attackerName, "God Like", kills)));
+                            }
                         }
                     }
                 }
@@ -1542,19 +1583,27 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
                 if (@event.Dominated > 0 && attacker != null && attacker.IsValid)
                 {
                     SendUdpLog($"{FormatPlayerString(attacker)} triggered \"domination\" against {FormatPlayerString(victim)}");
-                    string domAnnounce = FormatColors(string.Format(
-                        "[green][HLstatsX][default] [green]{0}[default] is [green]DOMINATING[default] [green]{1}[default]!",
-                        attacker.Name, victim.Name));
-                    BroadcastChatMessage(domAnnounce);
+                    string attackerName = attacker.Name;
+                    string victimName = victim.Name;
+                    foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
+                    {
+                        var loc = Core.Translation.GetPlayerLocalizer(p);
+                        string tmpl = loc["hlx.domination"] ?? "[red][HLstatsX][default] [green]{0}[default] is [green]DOMINATING[default] [green]{1}[default]!";
+                        p.SendMessage(MessageType.Chat, FormatColors(string.Format(tmpl, attackerName, victimName)));
+                    }
                 }
 
                 if (@event.Revenge > 0 && attacker != null && attacker.IsValid)
                 {
                     SendUdpLog($"{FormatPlayerString(attacker)} triggered \"revenge\" against {FormatPlayerString(victim)}");
-                    string revAnnounce = FormatColors(string.Format(
-                        "[green][HLstatsX][default] [green]{0}[default] got [green]REVENGE[default] on [green]{1}[default]!",
-                        attacker.Name, victim.Name));
-                    BroadcastChatMessage(revAnnounce);
+                    string attackerName = attacker.Name;
+                    string victimName = victim.Name;
+                    foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
+                    {
+                        var loc = Core.Translation.GetPlayerLocalizer(p);
+                        string tmpl = loc["hlx.revenge"] ?? "[red][HLstatsX][default] [green]{0}[default] got [green]REVENGE[default] on [green]{1}[default]!";
+                        p.SendMessage(MessageType.Chat, FormatColors(string.Format(tmpl, attackerName, victimName)));
+                    }
                 }
             }
 
@@ -1715,7 +1764,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
             var m = ConnectRankCountryRegex.Match(clean);
             if (m.Success)
             {
-                string tmpl = loc["hlx.player_connected_rank_country"] ?? "[green][HLstatsX][default] [yellow]{0}[default] (Pos [lightred]#{1}[default] with [lime]{2}[default] points) has connected from [yellow]{3}[default]!";
+                string tmpl = loc["hlx.player_connected_rank_country"] ?? "[red][HLstatsX][default] [yellow]{0}[default] (Pos [lightred]#{1}[default] with [lime]{2}[default] points) has connected from [yellow]{3}[default]!";
                 string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), m.Groups["rank"].Value.Trim(), m.Groups["pts"].Value.Trim(), m.Groups["country"].Value.Trim());
                 return FormatColors(formatted);
             }
@@ -1723,7 +1772,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
             m = ConnectRankRegex.Match(clean);
             if (m.Success)
             {
-                string tmpl = loc["hlx.player_connected_rank"] ?? "[green][HLstatsX][default] [yellow]{0}[default] (Pos [lightred]#{1}[default] with [lime]{2}[default] points) has connected!";
+                string tmpl = loc["hlx.player_connected_rank"] ?? "[red][HLstatsX][default] [yellow]{0}[default] (Pos [lightred]#{1}[default] with [lime]{2}[default] points) has connected!";
                 string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), m.Groups["rank"].Value.Trim(), m.Groups["pts"].Value.Trim());
                 return FormatColors(formatted);
             }
@@ -1731,7 +1780,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
             m = NewConnectCountryRegex.Match(clean);
             if (m.Success)
             {
-                string tmpl = loc["hlx.new_player_connected_country"] ?? "[green][HLstatsX][default] New player [yellow]{0}[default] has connected from [yellow]{1}[default]!";
+                string tmpl = loc["hlx.new_player_connected_country"] ?? "[red][HLstatsX][default] New player [yellow]{0}[default] has connected from [yellow]{1}[default]!";
                 string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), m.Groups["country"].Value.Trim());
                 return FormatColors(formatted);
             }
@@ -1739,7 +1788,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
             m = ConnectCountryRegex.Match(clean);
             if (m.Success)
             {
-                string tmpl = loc["hlx.player_connected_country"] ?? "[green][HLstatsX][default] Player [yellow]{0}[default] has connected from [yellow]{1}[default]!";
+                string tmpl = loc["hlx.player_connected_country"] ?? "[red][HLstatsX][default] Player [yellow]{0}[default] has connected from [yellow]{1}[default]!";
                 string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), m.Groups["country"].Value.Trim());
                 return FormatColors(formatted);
             }
@@ -1747,7 +1796,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
             m = KillRewardRegex.Match(clean);
             if (m.Success)
             {
-                string tmpl = loc["hlx.kill_reward"] ?? "[green][HLstatsX][default] [green]{0}[default] ({1}) got [lime]+{2} points[default] for killing [green]{3}[default] ({4})!";
+                string tmpl = loc["hlx.kill_reward"] ?? "[red][HLstatsX][default] [green]{0}[default] ({1}) got [lime]+{2} points[default] for killing [green]{3}[default] ({4})!";
                 string formatted = string.Format(tmpl, m.Groups["killer"].Value.Trim(), m.Groups["kpts"].Value.Trim(), m.Groups["pts"].Value.Trim(), m.Groups["victim"].Value.Trim(), m.Groups["vpts"].Value.Trim());
                 return FormatColors(formatted);
             }
@@ -1755,7 +1804,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
             m = KillRewardSimpleRegex.Match(clean);
             if (m.Success)
             {
-                string tmpl = loc["hlx.kill_reward"] ?? "[green][HLstatsX][default] [green]{0}[default] ({1}) got [lime]+{2} points[default] for killing [green]{3}[default] ({4})!";
+                string tmpl = loc["hlx.kill_reward"] ?? "[red][HLstatsX][default] [green]{0}[default] ({1}) got [lime]+{2} points[default] for killing [green]{3}[default] ({4})!";
                 string formatted = string.Format(tmpl, m.Groups["killer"].Value.Trim(), m.Groups["kpts"].Value.Trim(), m.Groups["pts"].Value.Trim(), m.Groups["victim"].Value.Trim(), "-");
                 return FormatColors(formatted);
             }
@@ -1763,7 +1812,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
             m = TeamkillPenaltyRegex.Match(clean);
             if (m.Success)
             {
-                string tmpl = loc["hlx.teamkill_penalty"] ?? "[green][HLstatsX][default] [green]{0}[default] lost [red]-{1} points[default] ({2}) for team-killing!";
+                string tmpl = loc["hlx.teamkill_penalty"] ?? "[red][HLstatsX][default] [green]{0}[default] lost [red]-{1} points[default] ({2}) for team-killing!";
                 string formatted = string.Format(tmpl, m.Groups["killer"].Value.Trim(), m.Groups["pts"].Value.Trim(), m.Groups["total"].Value.Trim());
                 return FormatColors(formatted);
             }
@@ -1772,7 +1821,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
             if (m.Success)
             {
                 string verb = m.Groups["verb"].Value.ToLowerInvariant();
-                string tmpl = loc["hlx.player_player_action"] ?? "[green][HLstatsX][default] [green]{0}[default] {1} [lime]{2} points[default] ({3}) for [green]{4}[default] against [green]{5}[default] ({6})!";
+                string tmpl = loc["hlx.player_player_action"] ?? "[red][HLstatsX][default] [green]{0}[default] {1} [lime]{2} points[default] ({3}) for [green]{4}[default] against [green]{5}[default] ({6})!";
                 string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), verb, m.Groups["pts"].Value.Trim(), m.Groups["ppts"].Value.Trim(), m.Groups["action"].Value.Trim(), m.Groups["victim"].Value.Trim(), m.Groups["vpts"].Value.Trim());
                 return FormatColors(formatted);
             }
@@ -1781,7 +1830,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
             if (m.Success)
             {
                 string verb = m.Groups["verb"].Value.ToLowerInvariant();
-                string tmpl = loc["hlx.player_action"] ?? "[green][HLstatsX][default] [green]{0}[default] {1} [lime]{2} points[default] ({3}) for [green]{4}[default]!";
+                string tmpl = loc["hlx.player_action"] ?? "[red][HLstatsX][default] [green]{0}[default] {1} [lime]{2} points[default] ({3}) for [green]{4}[default]!";
                 string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), verb, m.Groups["pts"].Value.Trim(), m.Groups["ppts"].Value.Trim(), m.Groups["action"].Value.Trim());
                 return FormatColors(formatted);
             }
@@ -1792,8 +1841,8 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
                 string verb = m.Groups["verb"].Value.ToLowerInvariant();
                 string key = verb == "lost" ? "hlx.points_lost" : "hlx.points_got";
                 string tmpl = loc[key] ?? (verb == "lost"
-                    ? "[green][HLstatsX][default] You [red]lost -{0} points[default] ({1}) for [green]{2}[default]!"
-                    : "[green][HLstatsX][default] You [lime]got +{0} points[default] ({1}) for [green]{2}[default]!");
+                    ? "[red][HLstatsX][default] You [red]lost -{0} points[default] ({1}) for [green]{2}[default]!"
+                    : "[red][HLstatsX][default] You [lime]got +{0} points[default] ({1}) for [green]{2}[default]!");
                 string formatted = string.Format(tmpl, m.Groups["pts"].Value.Trim(), m.Groups["team"].Value.Trim(), m.Groups["action"].Value.Trim());
                 return FormatColors(formatted);
             }
@@ -1801,7 +1850,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
             m = RankMsgRegex.Match(clean);
             if (m.Success)
             {
-                string tmpl = loc["hlx.rank"] ?? "[green][HLstatsX][default] [yellow]{0}[default] is on rank [lightred]#{1}[default] of [lightred]{2}[default] with [lightred]{3}[default] points!";
+                string tmpl = loc["hlx.rank"] ?? "[red][HLstatsX][default] [yellow]{0}[default] is on rank [lightred]#{1}[default] of [lightred]{2}[default] with [lightred]{3}[default] points!";
                 string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), m.Groups["rank"].Value.Trim(), m.Groups["total"].Value.Trim(), m.Groups["pts"].Value.Trim());
                 return FormatColors(formatted);
             }
@@ -1809,7 +1858,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
             m = RankHiddenMsgRegex.Match(clean);
             if (m.Success)
             {
-                string tmpl = loc["hlx.rank_hidden"] ?? "[green][HLstatsX][default] [yellow]{0}[default] is on rank [grey](HIDDEN)[default] of [lightred]{1}[default] with [lightred]{2}[default] points!";
+                string tmpl = loc["hlx.rank_hidden"] ?? "[red][HLstatsX][default] [yellow]{0}[default] is on rank [grey](HIDDEN)[default] of [lightred]{1}[default] with [lightred]{2}[default] points!";
                 string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), m.Groups["total"].Value.Trim(), m.Groups["pts"].Value.Trim());
                 return FormatColors(formatted);
             }
@@ -1817,7 +1866,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
             m = KDeathMsgRegex.Match(clean);
             if (m.Success)
             {
-                string tmpl = loc["hlx.kdeath"] ?? "[green][HLstatsX][default] [yellow]{0}[default] stats: [lime]{1} kills[default], [red]{2} deaths[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Acc: [yellow]{6}[default]%";
+                string tmpl = loc["hlx.kdeath"] ?? "[red][HLstatsX][default] [yellow]{0}[default] stats: [lime]{1} kills[default], [red]{2} deaths[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Acc: [yellow]{6}[default]%";
                 string acc = string.IsNullOrWhiteSpace(m.Groups["acc"].Value) ? "0.0" : m.Groups["acc"].Value.Trim();
                 string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), m.Groups["kills"].Value.Trim(), m.Groups["deaths"].Value.Trim(), m.Groups["kd"].Value.Trim(), m.Groups["hs"].Value.Trim(), m.Groups["hpk"].Value.Trim(), acc);
                 return FormatColors(formatted);
@@ -1826,7 +1875,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
             m = SessionMsgRegex.Match(clean);
             if (m.Success)
             {
-                string tmpl = loc["hlx.session"] ?? "[green][HLstatsX][default] [yellow]{0}[default] session: [lime]{1} kills[default], [red]{2} deaths[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Acc: [yellow]{6}[default]%";
+                string tmpl = loc["hlx.session"] ?? "[red][HLstatsX][default] [yellow]{0}[default] session: [lime]{1} kills[default], [red]{2} deaths[default] (K/D: [yellow]{3}[default]), [lime]{4} HS[default] ({5}%), Acc: [yellow]{6}[default]%";
                 string kills = m.Groups["kills"].Value.Trim();
                 string deaths = m.Groups["deaths"].Value.Trim();
                 string kd = double.TryParse(kills, out double k) && double.TryParse(deaths, out double d) && d > 0 ? (k / d).ToString("F2") : kills;
@@ -1838,7 +1887,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
             m = NextMsgRegex.Match(clean);
             if (m.Success)
             {
-                string tmpl = loc["hlx.next"] ?? "[green][HLstatsX][default] Next ranked above you: [yellow]{0}[default] (Rank #{1} with {2} points)";
+                string tmpl = loc["hlx.next"] ?? "[red][HLstatsX][default] Next ranked above you: [yellow]{0}[default] (Rank #{1} with {2} points)";
                 string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), m.Groups["rank"].Value.Trim(), m.Groups["pts"].Value.Trim());
                 return FormatColors(formatted);
             }
@@ -1848,8 +1897,18 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
             Console.WriteLine($"[HLstatsX:CE] FormatSourceModMessage error: {ex.Message}");
         }
 
-        string prefix = string.IsNullOrEmpty(_messagePrefix) ? "[green][HLstatsX][default] " : _messagePrefix;
-        return FormatColors($"{prefix}{rawMsg}");
+        string prefix = string.IsNullOrEmpty(_messagePrefix) ? "[red][HLstatsX][default] " : _messagePrefix;
+        string cleanMsg = rawMsg.Trim();
+        if (cleanMsg.StartsWith("[HLstatsX]", StringComparison.OrdinalIgnoreCase))
+            cleanMsg = cleanMsg.Substring(10).Trim();
+        else if (cleanMsg.StartsWith("[red][HLstatsX][default]", StringComparison.OrdinalIgnoreCase))
+            cleanMsg = cleanMsg.Substring(24).Trim();
+        else if (cleanMsg.StartsWith("[green][HLstatsX][default]", StringComparison.OrdinalIgnoreCase))
+            cleanMsg = cleanMsg.Substring(26).Trim();
+        else if (cleanMsg.StartsWith("\x07[HLstatsX]\x01", StringComparison.OrdinalIgnoreCase) || cleanMsg.StartsWith("\x04[HLstatsX]\x01", StringComparison.OrdinalIgnoreCase))
+            cleanMsg = cleanMsg.Substring(12).Trim();
+
+        return FormatColors($"{prefix}{cleanMsg}");
     }
 
     private void CancelMenuAutoClose(int playerId)

@@ -3356,6 +3356,12 @@ while ($loop = &getLine()) {
 						$g_servers{$s_addr}->updateDB();
 						$ev_status = "Server maxplayers updated to $mp";
 					}
+				} elsif ($ev_obj_a eq "hostname") {
+					if ($cvar_val ne "") {
+						$g_servers{$s_addr}->set("name", $cvar_val);
+						$g_servers{$s_addr}->updateDB();
+						$ev_status = "Server hostname updated to $cvar_val";
+					}
 				}
 				if ($ev_status eq "") {
 					$ev_status = "server_cvar: $ev_obj_a = $cvar_val";
