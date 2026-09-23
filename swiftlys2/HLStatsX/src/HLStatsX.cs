@@ -22,7 +22,7 @@ namespace HLStatsX;
 
 [PluginMetadata(
     Id = "HLStatsX",
-    Version = "1.1.6",
+    Version = "1.1.7",
     Name = "HLStatsX:CE Ingame Plugin (SwiftlyS2)",
     Author = "SyntX34",
     Description = "Provides CS2 in-game interaction and messaging with HLstatsX:CE daemon"
@@ -34,13 +34,20 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
     {
         "rank", "skill", "points", "place", "session", "session_data",
         "kpd", "kdratio", "kdeath", "next", "load", "status", "servers",
-        "top20", "top10", "top5", "clans", "bans", "cheaters", "statsme",
+        "top", "top20", "top15", "top12", "top10", "top5", "clans", "bans", "cheaters", "statsme",
         "weapons", "weapon", "action", "actions", "accuracy", "targets",
         "target", "kills", "kill", "player_kills", "cmd", "cmds", "command",
         "hlx_display 0", "hlx_display 1", "hlx_teams 0", "hlx_teams 1",
         "hlx_hideranking", "hlx_chat 0", "hlx_chat 1", "hlx_menu",
         "servers 1", "servers 2", "servers 3", "hlx", "hlstatsx", "help"
     };
+
+    private static bool IsStatCommand(string cmd)
+    {
+        if (BlockedCommands.Contains(cmd)) return true;
+        if (cmd.StartsWith("top", StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
 
     private static readonly HashSet<string> MenuCommands = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -146,7 +153,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
         public string ProxyKey { get; set; } = "";
         public int MaxPlayers { get; set; } = 32;
         public int ReceiverPort { get; set; } = 27016;  // Must equal ServerPort+1; daemon sends HLX_CMD here
-        public string MenuType { get; set; } = "CustomHud";
+        public string MenuType { get; set; } = "BuiltIn";
         public string CustomMenuLayout { get; set; } = "resources/panorama/layout/custom_game/hlx_menu.xml";
         public string CustomCsayLayout { get; set; } = "resources/panorama/layout/custom_game/hlx_csay.xml";
         public string CustomTsayLayout { get; set; } = "resources/panorama/layout/custom_game/hlx_tsay.xml";
@@ -163,6 +170,22 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
     private readonly Dictionary<int, System.Threading.CancellationTokenSource> _csayTimers = new();
     private readonly Dictionary<int, CCSCustomHudLayout> _tsayHuds = new();
     private readonly Dictionary<int, System.Threading.CancellationTokenSource> _tsayTimers = new();
+    private readonly Dictionary<int, (string Title, List<string> Lines, int Page)> _customHudStatsState = new();
+    private readonly Dictionary<ulong, int> _playerStreak = new();
+    private static readonly (int Kills, string Name)[] StreakMilestones = new[]
+    {
+        (2, "Double Kill"),
+        (3, "Triple Kill"),
+        (4, "Domination"),
+        (5, "Rampage"),
+        (6, "Mega Kill"),
+        (7, "Ownage"),
+        (8, "Ultra Kill"),
+        (9, "Killing Spree"),
+        (10, "Monster Kill"),
+        (11, "Unstoppable"),
+        (12, "God Like")
+    };
     private string _protectAddress = "";
     private bool _blockChatCommands = true;
     private string _messagePrefix = "";
@@ -1023,7 +1046,10 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
         RegisterPlayerStatsCommand("skill");
         RegisterPlayerStatsCommand("points");
         RegisterPlayerStatsCommand("place");
+        RegisterPlayerStatsCommand("top");
         RegisterPlayerStatsCommand("top10");
+        RegisterPlayerStatsCommand("top12");
+        RegisterPlayerStatsCommand("top15");
         RegisterPlayerStatsCommand("top20");
         RegisterPlayerStatsCommand("top5");
         RegisterPlayerStatsCommand("statsme");
@@ -1051,8 +1077,13 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
             if (player == null || !player.IsValid) return HookResult.Continue;
 
             string text = @event.Text?.Trim() ?? "";
+            if (string.IsNullOrEmpty(text)) return HookResult.Continue;
+
+            // Silently ignore slash commands, do not forward to daemon or process
+            if (text.StartsWith('/')) return HookResult.Continue;
+
             string cleaned = text;
-            if (cleaned.StartsWith('/') || cleaned.StartsWith('!'))
+            if (cleaned.StartsWith('!'))
                 cleaned = cleaned.Substring(1).Trim();
 
             var parts = cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -1065,7 +1096,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
                     return HookResult.Handled;
                 }
 
-                if (BlockedCommands.Contains(cmd))
+                if (IsStatCommand(cmd))
                 {
                     string verb = @event.TeamOnly ? "say_team" : "say";
                     SendLog(player, cleaned, verb);
@@ -1461,10 +1492,44 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
 
             if (victim != null && victim.IsValid)
             {
+                // Reset streak for victim
+                if (victim.SteamID > 0)
+                    _playerStreak[victim.SteamID] = 0;
+
                 if (attacker != null && attacker.IsValid && attacker.UserID != victim.UserID)
                 {
                     string headshotProp = @event.Headshot ? " (headshot)" : "";
                     SendUdpLog($"{FormatPlayerString(attacker)} killed {FormatPlayerString(victim)} with \"{finalWeapon}\"{headshotProp}");
+
+                    // Track attacker streak
+                    if (attacker.SteamID > 0)
+                    {
+                        _playerStreak.TryGetValue(attacker.SteamID, out int curStreak);
+                        curStreak++;
+                        _playerStreak[attacker.SteamID] = curStreak;
+
+                        // Check milestones
+                        var matchedMilestone = StreakMilestones.FirstOrDefault(m => m.Kills == curStreak);
+                        if (matchedMilestone.Kills > 0)
+                        {
+                            SendUdpLog($"{FormatPlayerString(attacker)} triggered \"kill_streak_{curStreak}\"");
+                            if (curStreak >= 3)
+                            {
+                                string streakAnnounce = FormatColors(string.Format(
+                                    "[green][HLstatsX][default] [green]{0}[default] is on a [green]{1}[default] streak ({2} kills)!",
+                                    attacker.Name, matchedMilestone.Name, curStreak));
+                                BroadcastChatMessage(streakAnnounce);
+                            }
+                        }
+                        else if (curStreak > 12)
+                        {
+                            SendUdpLog($"{FormatPlayerString(attacker)} triggered \"kill_streak_12\"");
+                            string streakAnnounce = FormatColors(string.Format(
+                                "[green][HLstatsX][default] [green]{0}[default] is on a [green]God Like[default] streak ({1} kills)!",
+                                attacker.Name, curStreak));
+                            BroadcastChatMessage(streakAnnounce);
+                        }
+                    }
                 }
                 else if (attacker == null || attacker.UserID == victim.UserID)
                 {
@@ -1475,10 +1540,22 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
                     SendUdpLog($"{FormatPlayerString(@event.AssisterPlayer)} triggered \"assisted_kill\" against {FormatPlayerString(victim)}");
 
                 if (@event.Dominated > 0 && attacker != null && attacker.IsValid)
+                {
                     SendUdpLog($"{FormatPlayerString(attacker)} triggered \"domination\" against {FormatPlayerString(victim)}");
+                    string domAnnounce = FormatColors(string.Format(
+                        "[green][HLstatsX][default] [green]{0}[default] is [green]DOMINATING[default] [green]{1}[default]!",
+                        attacker.Name, victim.Name));
+                    BroadcastChatMessage(domAnnounce);
+                }
 
                 if (@event.Revenge > 0 && attacker != null && attacker.IsValid)
+                {
                     SendUdpLog($"{FormatPlayerString(attacker)} triggered \"revenge\" against {FormatPlayerString(victim)}");
+                    string revAnnounce = FormatColors(string.Format(
+                        "[green][HLstatsX][default] [green]{0}[default] got [green]REVENGE[default] on [green]{1}[default]!",
+                        attacker.Name, victim.Name));
+                    BroadcastChatMessage(revAnnounce);
+                }
             }
 
             if (!string.IsNullOrEmpty(finalWeapon) && WeaponCode.ContainsKey(finalWeapon))
@@ -1550,6 +1627,14 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
 
     private static readonly Regex KillRewardSimpleRegex = new(
         @"(?<killer>.+?)\s*\((?<kpts>[\d,]+)\)(?<kextra>.*?)\s*got\s*(?<pts>[+-]?\d+)\s*points\s*for killing\s*(?<victim>.+)$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex PlayerPlayerActionRegex = new(
+        @"(?<player>.+?)\s+(?<verb>got|lost)\s+(?<pts>[\d,]+)\s+points\s*\((?<ppts>[\d,]+)\)\s*for\s+(?<action>.+?)\s+against\s+(?<victim>.+?)\s*\((?<vpts>[\d,]+)\)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex PlayerActionRegex = new(
+        @"(?<player>.+?)\s+(?<verb>got|lost)\s+(?<pts>[\d,]+)\s+points\s*\((?<ppts>[\d,]+)\)\s*for\s+(?<action>.+)$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex ActionRewardRegex = new(
@@ -1662,7 +1747,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
             m = KillRewardRegex.Match(clean);
             if (m.Success)
             {
-                string tmpl = loc["hlx.kill_reward"] ?? "[green][HLstatsX][default] [yellow]{0}[default] ({1}) got [lime]+{2} points[default] for killing [yellow]{3}[default] ({4})!";
+                string tmpl = loc["hlx.kill_reward"] ?? "[green][HLstatsX][default] [green]{0}[default] ({1}) got [lime]+{2} points[default] for killing [green]{3}[default] ({4})!";
                 string formatted = string.Format(tmpl, m.Groups["killer"].Value.Trim(), m.Groups["kpts"].Value.Trim(), m.Groups["pts"].Value.Trim(), m.Groups["victim"].Value.Trim(), m.Groups["vpts"].Value.Trim());
                 return FormatColors(formatted);
             }
@@ -1670,7 +1755,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
             m = KillRewardSimpleRegex.Match(clean);
             if (m.Success)
             {
-                string tmpl = loc["hlx.kill_reward"] ?? "[green][HLstatsX][default] [yellow]{0}[default] ({1}) got [lime]+{2} points[default] for killing [yellow]{3}[default] ({4})!";
+                string tmpl = loc["hlx.kill_reward"] ?? "[green][HLstatsX][default] [green]{0}[default] ({1}) got [lime]+{2} points[default] for killing [green]{3}[default] ({4})!";
                 string formatted = string.Format(tmpl, m.Groups["killer"].Value.Trim(), m.Groups["kpts"].Value.Trim(), m.Groups["pts"].Value.Trim(), m.Groups["victim"].Value.Trim(), "-");
                 return FormatColors(formatted);
             }
@@ -1678,8 +1763,26 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
             m = TeamkillPenaltyRegex.Match(clean);
             if (m.Success)
             {
-                string tmpl = loc["hlx.teamkill_penalty"] ?? "[green][HLstatsX][default] [yellow]{0}[default] lost [red]-{1} points[default] ({2}) for team-killing!";
+                string tmpl = loc["hlx.teamkill_penalty"] ?? "[green][HLstatsX][default] [green]{0}[default] lost [red]-{1} points[default] ({2}) for team-killing!";
                 string formatted = string.Format(tmpl, m.Groups["killer"].Value.Trim(), m.Groups["pts"].Value.Trim(), m.Groups["total"].Value.Trim());
+                return FormatColors(formatted);
+            }
+
+            m = PlayerPlayerActionRegex.Match(clean);
+            if (m.Success)
+            {
+                string verb = m.Groups["verb"].Value.ToLowerInvariant();
+                string tmpl = loc["hlx.player_player_action"] ?? "[green][HLstatsX][default] [green]{0}[default] {1} [lime]{2} points[default] ({3}) for [green]{4}[default] against [green]{5}[default] ({6})!";
+                string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), verb, m.Groups["pts"].Value.Trim(), m.Groups["ppts"].Value.Trim(), m.Groups["action"].Value.Trim(), m.Groups["victim"].Value.Trim(), m.Groups["vpts"].Value.Trim());
+                return FormatColors(formatted);
+            }
+
+            m = PlayerActionRegex.Match(clean);
+            if (m.Success)
+            {
+                string verb = m.Groups["verb"].Value.ToLowerInvariant();
+                string tmpl = loc["hlx.player_action"] ?? "[green][HLstatsX][default] [green]{0}[default] {1} [lime]{2} points[default] ({3}) for [green]{4}[default]!";
+                string formatted = string.Format(tmpl, m.Groups["player"].Value.Trim(), verb, m.Groups["pts"].Value.Trim(), m.Groups["ppts"].Value.Trim(), m.Groups["action"].Value.Trim());
                 return FormatColors(formatted);
             }
 
@@ -1689,8 +1792,8 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
                 string verb = m.Groups["verb"].Value.ToLowerInvariant();
                 string key = verb == "lost" ? "hlx.points_lost" : "hlx.points_got";
                 string tmpl = loc[key] ?? (verb == "lost"
-                    ? "[green][HLstatsX][default] You [red]lost -{0} points[default] ({1}) for [yellow]{2}[default]!"
-                    : "[green][HLstatsX][default] You [lime]got +{0} points[default] ({1}) for [yellow]{2}[default]!");
+                    ? "[green][HLstatsX][default] You [red]lost -{0} points[default] ({1}) for [green]{2}[default]!"
+                    : "[green][HLstatsX][default] You [lime]got +{0} points[default] ({1}) for [green]{2}[default]!");
                 string formatted = string.Format(tmpl, m.Groups["pts"].Value.Trim(), m.Groups["team"].Value.Trim(), m.Groups["action"].Value.Trim());
                 return FormatColors(formatted);
             }
@@ -2013,6 +2116,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
         {
             CancelMenuAutoClose(playerId);
             _activeHudPlayers.Remove(playerId);
+            _customHudStatsState.Remove(playerId);
             if (_playerHuds.TryGetValue(playerId, out var hud))
             {
                 if (hud != null && hud.IsValid)
@@ -2131,6 +2235,41 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
 
             string button = @event.ButtonId ?? "";
 
+            // Check if player is viewing a stats display list
+            if (_customHudStatsState.TryGetValue(playerId, out var state))
+            {
+                int totalPages = Math.Max(1, (int)Math.Ceiling(state.Lines.Count / 10.0));
+                if (button == "HlxMenuBack")
+                {
+                    if (state.Page > 0)
+                    {
+                        RenderCustomHudStatsPage(player, hud, state.Title, state.Lines, state.Page - 1);
+                    }
+                    else
+                    {
+                        _customHudStatsState.Remove(playerId);
+                        OpenCustomHudMenu(player);
+                    }
+                    return;
+                }
+                if (button == "HlxMenuNext")
+                {
+                    if (state.Page + 1 < totalPages)
+                    {
+                        RenderCustomHudStatsPage(player, hud, state.Title, state.Lines, state.Page + 1);
+                    }
+                    return;
+                }
+                if (button == "HlxMenuExit")
+                {
+                    _customHudStatsState.Remove(playerId);
+                    CloseCustomHud(playerId);
+                    return;
+                }
+                // Option click in stat display: does not trigger anything
+                return;
+            }
+
             switch (button)
             {
                 case "HlxMenuOption01":
@@ -2183,14 +2322,14 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
             builder.Design.SetMenuFooterVisible(true);
             builder.Design.SetDefaultComment("Select an option to view your stats");
 
-            builder.AddOption(new HlxMenuOption("My Rank",       "rank",    player, this));
-            builder.AddOption(new HlxMenuOption("Top 10",        "top10",   player, this));
-            builder.AddOption(new HlxMenuOption("Top 20",        "top20",   player, this));
-            builder.AddOption(new HlxMenuOption("Next Above Me", "next",    player, this));
-            builder.AddOption(new HlxMenuOption("My Session",    "session", player, this));
-            builder.AddOption(new HlxMenuOption("My Stats",      "statsme", player, this));
-            builder.AddOption(new HlxMenuOption("Weapon Stats",  "weapons", player, this));
-            builder.AddOption(new HlxMenuOption("Server List",   "servers", player, this));
+            builder.AddOption(new HlxMenuOption("My Rank",       "rank",    player, this, closeOnClick: true));
+            builder.AddOption(new HlxMenuOption("Top 10",        "top10",   player, this, closeOnClick: true));
+            builder.AddOption(new HlxMenuOption("Top 20",        "top20",   player, this, closeOnClick: true));
+            builder.AddOption(new HlxMenuOption("Next Above Me", "next",    player, this, closeOnClick: true));
+            builder.AddOption(new HlxMenuOption("My Session",    "session", player, this, closeOnClick: true));
+            builder.AddOption(new HlxMenuOption("My Stats",      "statsme", player, this, closeOnClick: true));
+            builder.AddOption(new HlxMenuOption("Weapon Stats",  "weapons", player, this, closeOnClick: true));
+            builder.AddOption(new HlxMenuOption("Server List",   "servers", player, this, closeOnClick: true));
 
             Core.MenusAPI.OpenMenuForPlayer(player, builder.Build());
         }
@@ -2202,7 +2341,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
         }
     }
 
-    private void DisplayDaemonStatsMenu(IPlayer player, string rawMessage, int duration = 10)
+    private void DisplayDaemonStatsMenu(IPlayer player, string rawMessage, int duration = 15)
     {
         if (player == null || !player.IsValid) return;
 
@@ -2218,7 +2357,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
         DisplayBuiltinStatsMenu(player, rawMessage, duration);
     }
 
-    private void DisplayBuiltinStatsMenu(IPlayer player, string rawMessage, int duration = 10)
+    private void DisplayBuiltinStatsMenu(IPlayer player, string rawMessage, int duration = 15)
     {
         try
         {
@@ -2250,21 +2389,24 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
 
             builder.Design.SetMenuTitle(title);
             builder.Design.SetMenuTitleVisible(true);
-            builder.Design.SetMenuTitleItemCountVisible(false);
+            builder.Design.SetMenuTitleItemCountVisible(true);
             builder.Design.SetMenuFooterVisible(true);
             builder.Design.SetDefaultComment("HLStatsX Ingame Stats");
 
             if (optionLines.Count == 0)
             {
-                builder.AddOption(new HlxMenuOption(title, "hlx", player, this));
+                builder.AddOption(new HlxMenuOption(title, null, player, this, closeOnClick: false));
             }
             else
             {
                 foreach (var opt in optionLines)
                 {
-                    builder.AddOption(new HlxMenuOption(opt, "hlx", player, this));
+                    builder.AddOption(new HlxMenuOption(opt, null, player, this, closeOnClick: false));
                 }
             }
+
+            // Navigation: Return to Main Menu
+            builder.AddOption(new HlxMenuOption("« Main Menu", "hlx", player, this, closeOnClick: true, isAction: true));
 
             Core.MenusAPI.OpenMenuForPlayer(player, builder.Build());
 
@@ -2287,7 +2429,60 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
         }
     }
 
-    private void DisplayCustomHudStats(IPlayer player, string rawMessage, int duration = 10)
+    private void RenderCustomHudStatsPage(IPlayer player, CCSCustomHudLayout hud, string title, List<string> lines, int page)
+    {
+        int playerId = player.PlayerID;
+        int totalPages = Math.Max(1, (int)Math.Ceiling(lines.Count / 10.0));
+        if (page < 0) page = 0;
+        if (page >= totalPages) page = totalPages - 1;
+
+        _customHudStatsState[playerId] = (title, lines, page);
+
+        string pageTitle = totalPages > 1 ? $"{title} ({page + 1}/{totalPages})" : title;
+        hud.SetDialogVariableString("HlxMenuTitle", "menu_title", pageTitle);
+
+        int startIndex = page * 10;
+        for (int i = 1; i <= 10; i++)
+        {
+            string key = $"HlxMenuOption{i:D2}";
+            string labelKey = $"HlxMenuOption{i:D2}Label";
+            string varName = $"option_{i:D2}";
+            int itemIndex = startIndex + (i - 1);
+
+            if (itemIndex < lines.Count)
+            {
+                hud.SetDialogVariableString(labelKey, varName, lines[itemIndex]);
+                SetHudClass(hud, key, "Hidden", false);
+                SetHudClass(hud, key, "Interactive", false);
+            }
+            else
+            {
+                hud.SetDialogVariableString(labelKey, varName, "");
+                SetHudClass(hud, key, "Hidden", true);
+                SetHudClass(hud, key, "Interactive", false);
+            }
+        }
+
+        hud.SetDialogVariableString("HlxMenuBackLabel", "back_text", page > 0 ? "7. Prev" : "7. Menu");
+        hud.SetDialogVariableString("HlxMenuNextLabel", "next_text", "8. Next");
+        hud.SetDialogVariableString("HlxMenuExitLabel", "exit_text", "9. Exit");
+
+        SetHudClass(hud, "HlxMenuBack", "Hidden", false);
+        SetHudClass(hud, "HlxMenuBack", "Interactive", true);
+
+        bool hasNext = page + 1 < totalPages;
+        SetHudClass(hud, "HlxMenuNext", "Hidden", !hasNext);
+        SetHudClass(hud, "HlxMenuNext", "Interactive", hasNext);
+
+        SetHudClass(hud, "HlxMenuExit", "Hidden", false);
+        SetHudClass(hud, "HlxMenuExit", "Interactive", true);
+
+        hud.SetInputCaptureEnabledForPlayer(playerId, true);
+        SetHudClass(hud, "HlxMenuPanel", "Visible", true);
+        _activeHudPlayers.Add(playerId);
+    }
+
+    private void DisplayCustomHudStats(IPlayer player, string rawMessage, int duration = 15)
     {
         try
         {
@@ -2334,37 +2529,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
                 }
             }
 
-            hud.SetDialogVariableString("HlxMenuTitle", "menu_title", title);
-
-            for (int i = 1; i <= 10; i++)
-            {
-                string key = $"HlxMenuOption{i:D2}";
-                string labelKey = $"HlxMenuOption{i:D2}Label";
-                string varName = $"option_{i:D2}";
-
-                if (i <= optionLines.Count)
-                {
-                    hud.SetDialogVariableString(labelKey, varName, optionLines[i - 1]);
-                    SetHudClass(hud, key, "Hidden", false);
-                    SetHudClass(hud, key, "Interactive", true);
-                }
-                else
-                {
-                    hud.SetDialogVariableString(labelKey, varName, "");
-                    SetHudClass(hud, key, "Hidden", true);
-                    SetHudClass(hud, key, "Interactive", false);
-                }
-            }
-
-            hud.SetDialogVariableString("HlxMenuExitLabel", "exit_text", "9. Exit");
-            SetHudClass(hud, "HlxMenuBack", "Hidden", true);
-            SetHudClass(hud, "HlxMenuNext", "Hidden", true);
-            SetHudClass(hud, "HlxMenuExit", "Hidden", false);
-            SetHudClass(hud, "HlxMenuExit", "Interactive", true);
-
-            hud.SetInputCaptureEnabledForPlayer(playerId, true);
-            SetHudClass(hud, "HlxMenuPanel", "Visible", true);
-            _activeHudPlayers.Add(playerId);
+            RenderCustomHudStatsPage(player, hud, title, optionLines, 0);
 
             CancelMenuAutoClose(playerId);
             if (duration > 0)
@@ -2387,16 +2552,20 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
     internal sealed class HlxMenuOption : IMenuOption, IDisposable
     {
         private readonly string    _label;
-        private readonly string    _command;
+        private readonly string?   _command;
         private readonly IPlayer   _targetPlayer;
         private readonly HLStatsX  _plugin;
+        private readonly bool      _closeOnClick;
+        private readonly bool      _isAction;
 
-        public HlxMenuOption(string label, string command, IPlayer targetPlayer, HLStatsX plugin)
+        public HlxMenuOption(string label, string? command, IPlayer targetPlayer, HLStatsX plugin, bool closeOnClick = true, bool isAction = false)
         {
             _label        = label;
             _command      = command;
             _targetPlayer = targetPlayer;
             _plugin       = plugin;
+            _closeOnClick = closeOnClick;
+            _isAction     = isAction;
         }
 
         public IMenuAPI? Menu { get; set; }
@@ -2406,7 +2575,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
         public float MaxWidth { get => 0f; set { } }
         public bool Visible   { get => true; set { } }
         public bool Enabled   { get => true; set { } }
-        public bool CloseAfterClick => true;
+        public bool CloseAfterClick => _closeOnClick;
         public object? Tag { get; set; }
         public MenuOptionTextSize  TextSize  { get; set; } = MenuOptionTextSize.Medium;
         public MenuOptionTextStyle TextStyle { get; set; } = MenuOptionTextStyle.TruncateEnd;
@@ -2432,7 +2601,22 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
 
         public async System.Threading.Tasks.ValueTask OnClickAsync(IPlayer player)
         {
+            if (string.IsNullOrWhiteSpace(_command))
+            {
+                // Pure informational line - do not spam daemon or close
+                return;
+            }
+
             _plugin.CancelMenuAutoClose(player.PlayerID);
+
+            if (_command.Equals("hlx", StringComparison.OrdinalIgnoreCase) ||
+                _command.Equals("menu", StringComparison.OrdinalIgnoreCase))
+            {
+                _plugin.OpenStatsMenu(player);
+                await System.Threading.Tasks.ValueTask.CompletedTask;
+                return;
+            }
+
             _plugin.SendLog(player, _command, "say");
             await System.Threading.Tasks.ValueTask.CompletedTask;
         }
