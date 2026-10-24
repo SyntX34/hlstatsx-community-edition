@@ -147,11 +147,13 @@ sub quoteSQL
 # Connects to the HLstatsX database
 #
 
+my $last_db_ping = 0;
+
 sub doConnect
 {
 	$db_conn = DBI->connect(
 		"DBI:mysql:$db_name:$db_host",
-		$db_user, $db_pass, { mysql_enable_utf8mb4 => 1 }
+		$db_user, $db_pass, { mysql_enable_utf8mb4 => 1, mysql_auto_reconnect => 1 }
 	);
 	while(!$db_conn) {
 		&printEvent("MYSQL", "\nCan't connect to MySQL database '$db_name' on '$db_host'\n" .
@@ -159,12 +161,25 @@ sub doConnect
 		sleep(5);
 		$db_conn = DBI->connect(
 			"DBI:mysql:$db_name:$db_host",
-			$db_user, $db_pass, { mysql_enable_utf8mb4 => 1 }
+			$db_user, $db_pass, { mysql_enable_utf8mb4 => 1, mysql_auto_reconnect => 1 }
 		);
 	}
 	$db_conn->do("SET NAMES 'utf8mb4'");
 	&printEvent("MYSQL", "Connecting to MySQL database '$db_name' on '$db_host' as user '$db_user' ... connected ok", 1);
 	%db_stmt_cache = ();
+	$last_db_ping = time();
+}
+
+sub ensureConnected
+{
+	my $now = $::ev_daemontime || time();
+	if (!$db_conn || ($now - $last_db_ping > 5)) {
+		$last_db_ping = $now;
+		if (!$db_conn || !$db_conn->ping()) {
+			&printEvent("HLSTATSX", "Lost database connection. Trying to reconnect...", 1);
+			&doConnect();
+		}
+	}
 }
 
 #
@@ -176,13 +191,14 @@ sub doConnect
 sub doQuery
 {
 	my ($query, $callref) = @_;
-	if(!$db_conn->ping()) {
-		&printEvent("HLSTATSX", "Lost database connection. Trying to reconnect...", 1);
-		&doConnect();
-	}
+	&ensureConnected();
 
-	my $result = $db_conn->prepare($query) or die("Unable to prepare query:\n$query\n$DBI::errstr\n$callref");
-	$result->execute or die("Unable to execute query:\n$query\n$DBI::errstr\n$callref");
+	my $result = $db_conn->prepare($query);
+	if (!$result || !$result->execute()) {
+		&doConnect();
+		$result = $db_conn->prepare($query) or die("Unable to prepare query:\n$query\n$DBI::errstr\n$callref");
+		$result->execute() or die("Unable to execute query:\n$query\n$DBI::errstr\n$callref");
+	}
 	
 	return $result;
 }
@@ -190,27 +206,26 @@ sub doQuery
 sub execNonQuery
 {
 	my ($query) = @_;
-	if(!$db_conn->ping()) {
-		&printEvent("HLSTATSX", "Lost database connection. Trying to reconnect...", 1);
+	&ensureConnected();
+	if (!defined($db_conn->do($query))) {
 		&doConnect();
+		$db_conn->do($query);
 	}
-	#&printEvent("DEBUG","execNonQuery:\n".$query);
-	$db_conn->do($query);
 }
 
 sub execCached {
 	my ($query_id,$query, @bind_args) = @_;
 	
-	if(!$db_conn->ping()) {
-		&printEvent("HLSTATSX", "Lost database connection. Trying to reconnect...", 1);
-		&doConnect();
-	}
+	&ensureConnected();
 	
 	if(!$db_stmt_cache{$query_id}) {
 		$db_stmt_cache{$query_id} = $db_conn->prepare($query) or die("Unable to prepare query ($query_id):\n$query\n$DBI::errstr");
-		#&printEvent("HLSTATSX", "Prepared a statement ($query_id) for the first time.", 1);
 	} 
-	$db_stmt_cache{$query_id}->execute(@bind_args) or die ("Unable to execute query ($query_id):\n$query\n$DBI::errstr");
+	if (!$db_stmt_cache{$query_id}->execute(@bind_args)) {
+		&doConnect();
+		$db_stmt_cache{$query_id} = $db_conn->prepare($query) or die("Unable to prepare query ($query_id):\n$query\n$DBI::errstr");
+		$db_stmt_cache{$query_id}->execute(@bind_args) or die ("Unable to execute query ($query_id):\n$query\n$DBI::errstr");
+	}
 	return $db_stmt_cache{$query_id};
 }
 
@@ -437,16 +452,19 @@ sub abbreviate
 sub printEvent
 {
 	my ($code, $description, $update_timestamp, $force_output) = @_;
-	if ( (($g_debug > 0) && ($g_stdin == 0))|| (($g_stdin == 1) && ($force_output == 1)) ) {
+	if ( (($g_debug > 0 || $force_output == 1) && ($g_stdin == 0)) || (($g_stdin == 1) && ($force_output == 1)) ) {
 		my ($sec,$min,$hour,$mday,$mon,$year) = localtime(time());
 		my $timestamp = sprintf("%04d-%02d-%02d %02d:%02d:%02d", $year+1900, $mon+1, $mday, $hour, $min, $sec);
-		if ($update_timestamp == 0) {
+		if (defined($update_timestamp) && $update_timestamp == 0 && $ev_timestamp ne "") {
 			$timestamp = $ev_timestamp; 
-		}  
+		}
+		my $addr_str = ($s_addr ne "") ? $s_addr : "DAEMON";
+		my $clean_desc = defined($description) ? $description : "";
+		$clean_desc =~ s/\r?\n/ | /g;
 		if (is_number($code)) {
-			printf("%s: %21s - E%03d: %s\n", $timestamp, $s_addr, $code, $description);
+			printf("%s: %21s - E%03d: %s\n", $timestamp, $addr_str, $code, $clean_desc);
 		} else {
-			printf("%s: %21s - %s: %s\n", $timestamp, $s_addr, $code, $description);
+			printf("%s: %21s - %-10s: %s\n", $timestamp, $addr_str, $code, $clean_desc);
 		}  
 	}
 }

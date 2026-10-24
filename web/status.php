@@ -66,11 +66,16 @@ foreach ($_SERVER as $key => $entry) {
 require('config.php');
 header('Content-Type: text/html; charset=utf-8');
 
-// Check PHP configuration
+/* Check PHP configuration */
 
-if (version_compare(phpversion(), "4.1.0", "<"))
+if (
+	!((PHP_VERSION_ID >= 80235 && PHP_VERSION_ID < 80300) ||
+	  (PHP_VERSION_ID >= 80336 && PHP_VERSION_ID < 80400) ||
+	  (PHP_VERSION_ID >= 80427 && PHP_VERSION_ID < 80500) ||
+	  (PHP_VERSION_ID >= 80512))
+)
 {
-	error("HLstats requires PHP version 4.1.0 or newer (you are running PHP version " . phpversion() . ").");
+	error("HLstatsX:CE requires a patched PHP version (8.2.35+, 8.3.36+, 8.4.27+, or 8.5.12+; you are running PHP version " . PHP_VERSION . ").");
 }
 
 // do not report NOTICE warnings
@@ -472,7 +477,7 @@ if ($server_data['addr'] != '')  {
 			$j=0;
 			$thisteam = $teamdata[$curteam];
 			$teamcolor = 'background:'.$thisteam['playerlist_bgcolor'].';color:'.$thisteam['playerlist_color'];
-			$bordercolor = 'background:'.$$thisteam['playerlist_bgcolor'].';color:'.$thisteam['playerlist_color'].';border-top:1px '.$thisteam['playerlist_color'].' solid';
+			$bordercolor = 'background:'.$thisteam['playerlist_bgcolor'].';color:'.$thisteam['playerlist_color'].';border-top:1px '.$thisteam['playerlist_color'].' solid';
 			$team_display_name  = htmlspecialchars($thisteam['name']);
 
 			while (isset($playerdata[$curteam][$j]))

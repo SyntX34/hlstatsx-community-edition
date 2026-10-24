@@ -40,6 +40,21 @@ if (!defined('IN_HLSTATS')) {
 	die('Do not access this file directly.');
 }
 
+function isSafePhpVersion(): bool
+{
+	return (
+		(PHP_VERSION_ID >= 80235 && PHP_VERSION_ID < 80300) ||
+		(PHP_VERSION_ID >= 80336 && PHP_VERSION_ID < 80400) ||
+		(PHP_VERSION_ID >= 80427 && PHP_VERSION_ID < 80500) ||
+		(PHP_VERSION_ID >= 80512)
+	);
+}
+
+if (!isSafePhpVersion()) {
+	http_response_code(500);
+	die('HLstatsX:CE requires a patched PHP version (PHP 8.2.35+, 8.3.36+, 8.4.27+, or 8.5.12+). Current version: ' . PHP_VERSION);
+}
+
 function checkValidGame(string $gameStr, array $allowedGames, ?string &$retError) : bool
 {
 	// Not object and array
@@ -122,10 +137,10 @@ function getChatFilterParam()
 
 function eHtml($str)
 {
-    return htmlspecialchars($str, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    return htmlspecialchars((string)($str ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
 }
 
-// Test if flags exists
+/* Test if flags exists */
 /**
  * getFlag()
  * 
@@ -135,6 +150,7 @@ function eHtml($str)
  */
 function getFlag($flag, $type='url')
 {
+	$flag = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)($flag ?? ''));
 	$image = getImage('/flags/'.strtolower($flag));
 	if ($image)
 		return $image[$type];
@@ -151,6 +167,10 @@ function getFlag($flag, $type='url')
  */
 function valid_request($str, $numeric = false)
 {
+	if (is_array($str) || is_object($str) || $str === null) {
+		return $numeric ? -1 : '';
+	}
+	$str = (string)$str;
 	$search_pattern = array("/[^A-Za-z0-9\[\]*.,=()!\"$%&^`ґ':;ЯІі#+~_\-|<>\/\\\\@{}дцьДЦЬ ]/");
 	$replace_pattern = array('');
 	$str = preg_replace($search_pattern, $replace_pattern, $str);
@@ -517,7 +537,10 @@ function getEmailLink(?string $email, int $maxLength = 40) : string
  */
 function getImage($filename)
 {
-	preg_match('/^(.*\/)(.+)$/', $filename, $matches);
+	$filename = str_replace('..', '', (string)($filename ?? ''));
+	if (!preg_match('/^(.*\/)(.+)$/', $filename, $matches)) {
+		return false;
+	}
 	$relpath = $matches[1];
 	$realfilename = $matches[2];
 	
@@ -590,15 +613,15 @@ function tryHexToRgb($hexVal = '') : ?array
 	];
 }
 
-// Deprecated function
+/* Deprecated function */
 function hex2rgb($hexVal = '')
 {
-	$hexVal = preg_replace('[^a-fA-F0-9]', '', $hexVal);
+	$hexVal = preg_replace('/[^a-fA-F0-9]/', '', (string)($hexVal ?? ''));
 	if (strlen($hexVal) != 6)
 	{
 		return 'ERR: Incorrect colorcode, expecting 6 chars (a-f, 0-9)';
 	}
-	$arrTmp = explode(' ', chunk_split($hexVal, 2, ' '));
+	$arrTmp = explode(' ', trim(chunk_split($hexVal, 2, ' ')));
 	$arrTmp = array_map('hexdec', $arrTmp);
 	return array('red' => $arrTmp[0], 'green' => $arrTmp[1], 'blue' => $arrTmp[2]);
 }

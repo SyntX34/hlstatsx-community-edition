@@ -154,10 +154,15 @@ sub is_number
 
 sub printNotice
 {
-	my ($notice) = @_;
-	
-	if ($g_debug > 1) {
-		print ">> $notice\n";
+	my ($code, $description, $force) = @_;
+
+	if (defined($description) && $description ne "" && !is_number($description)) {
+		&printEvent($code, $description, 1, $force ? 1 : 0);
+		return;
+	}
+
+	if ($g_debug > 0 || $force) {
+		&printEvent("NOTICE", $code, 1, $force ? 1 : 0);
 	}
 }
 
@@ -200,7 +205,7 @@ sub track_hlstats_trend
 					WHERE
 						game=?
 				";
-				my $data = &execCached("get_game_stat_counts", $query, &quoteSQL($game));
+				my $data = &execCached("get_game_stat_counts", $query, $game);
 				my ($total_kills, $total_headshots, $total_servers, $act_slots, $max_slots) = $data->fetchrow_array;
 				if ($max_slots > 0) {
 					if ($act_slots > $max_slots) {
@@ -564,7 +569,8 @@ sub rewardTeam
 	
 	&printNotice("Rewarding team \"$team\" with \"$reward\" skill for action \"$actionid\" ...");
 	my @userlist;
-	foreach $player (values(%g_players)) {
+	my $srv_players = $g_servers{$s_addr}->{"srv_players"} || {};
+	foreach $player (values(%{$srv_players})) {
 		my $player_team      = $player->{team};
 		my $player_timestamp = $player->{timestamp};
 		if (($g_servers{$s_addr}->{ignore_bots} == 1) && (($player->{is_bot} == 1) || ($player->{userid} <= 0))) {
@@ -700,23 +706,33 @@ sub getClanId
 	my $clanTag  = "";
 	my $clanName = "";
 	my $clanId   = 0;
-	my $result = &doQuery("
-		SELECT
-			pattern,
-			position,
-			LENGTH(pattern) AS pattern_length
-		FROM
-			hlstats_ClanTags
-		ORDER BY
-			pattern_length DESC,
-			id
-	");
+
+	if (scalar(@g_clan_tags) == 0) {
+		my $result = &doQuery("
+			SELECT
+				pattern,
+				position,
+				LENGTH(pattern) AS pattern_length
+			FROM
+				hlstats_ClanTags
+			ORDER BY
+				pattern_length DESC,
+				id
+		");
+		@g_clan_tags = ();
+		while (my ($pattern, $position) = $result->fetchrow_array) {
+			my $regpattern = quotemeta($pattern);
+			$regpattern =~ s/([A-Za-z0-9]+[A-Za-z0-9_-]*)/\($1\)/; # to find clan name from tag
+			$regpattern =~ s/A/./g;
+			$regpattern =~ s/X/.?/g;
+			push(@g_clan_tags, { regpattern => $regpattern, position => $position });
+		}
+		$result->finish;
+	}
 	
-	while ( my($pattern, $position) = $result->fetchrow_array) {
-		my $regpattern = quotemeta($pattern);
-		$regpattern =~ s/([A-Za-z0-9]+[A-Za-z0-9_-]*)/\($1\)/; # to find clan name from tag
-		$regpattern =~ s/A/./g;
-		$regpattern =~ s/X/.?/g;
+	foreach my $tag_entry (@g_clan_tags) {
+		my $regpattern = $tag_entry->{regpattern};
+		my $position   = $tag_entry->{position};
 		
 		if ($g_debug > 2) {
 			&printNotice("regpattern=$regpattern");
@@ -1152,7 +1168,8 @@ sub getPlayerInfo
 						};
 					$uniqueid = $ipAddr;
 				} else {
-					while ( my($index, $player) = each(%g_players) ) {
+					my $srv_players = $g_servers{$s_addr}->{"srv_players"} || {};
+					foreach my $player (values(%{$srv_players})) {
 						if (($player->{userid} eq $userid) &&
 							($player->{name}   eq $name)) {
 						
@@ -1203,22 +1220,27 @@ sub getPlayerInfo
 		
 		if (!$haveplayer)
 		{
-			while ( my ($index, $player) = each(%g_players) ) {
-				# Cannot exit loop early as more than one player can exist with same uniqueid
-				# (bug? or just bad logging)
-				# Either way, we disconnect any that don't match the current line
-				if ($player->{uniqueid} eq $uniqueid) {
-					$haveplayer = 1;
-					# Catch players reconnecting without first disconnecting
-					if ($player->{userid} != $userid) {
-					
-						&doEvent_Disconnect(
-							$player->{"userid"},
-							$uniqueid,
-							""
-						);
-						$haveplayer = 0;
+			my $srv_players = $g_servers{$s_addr}->{"srv_players"} || {};
+			if (defined($srv_players->{"$userid/$uniqueid"})) {
+				$haveplayer = 1;
+			} else {
+				my @stale_uids = ();
+				foreach my $player (values(%{$srv_players})) {
+					if ($player->{uniqueid} eq $uniqueid) {
+						if ($player->{userid} != $userid) {
+							push(@stale_uids, $player->{"userid"});
+						} else {
+							$haveplayer = 1;
+						}
 					}
+				}
+				foreach my $old_uid (@stale_uids) {
+					&doEvent_Disconnect(
+						$old_uid,
+						$uniqueid,
+						""
+					);
+					$haveplayer = 0;
 				}
 			}
 		}
@@ -1599,6 +1621,7 @@ sub readDatabaseConfig()
 	%g_config_servers = ();
 	%g_servers = ();
 	%g_games = ();
+	@g_clan_tags = ();
 
 	# elstatsneo: read the servers portion from the mysql database
 	my $srv_id = &doQuery("SELECT serverId,CONCAT(address,':',port) AS addr FROM hlstats_Servers");
@@ -1991,12 +2014,18 @@ sub getLine
 $timeout    = 0;
 $s_output = "";
 my ($proxy_s_peerhost, $proxy_s_peerport);
+my $s_select = (!$g_stdin && $s_socket) ? IO::Select->new($s_socket) : undef;
+my $last_ts_sec = 0;
+my $last_housekeeping_time = 0;
 while ($loop = &getLine()) {
 
-    my ($sec,$min,$hour,$mday,$mon,$year) = localtime(time());
-    $ev_timestamp = sprintf("%04d-%02d-%02d %02d:%02d:%02d", $year+1900, $mon+1, $mday, $hour, $min, $sec);
 	$ev_unixtime  = time();
-	$ev_daemontime = $ev_unixtime; #time()
+	$ev_daemontime = $ev_unixtime;
+	if ($ev_unixtime != $last_ts_sec) {
+		my ($sec,$min,$hour,$mday,$mon,$year) = localtime($ev_unixtime);
+		$ev_timestamp = sprintf("%04d-%02d-%02d %02d:%02d:%02d", $year+1900, $mon+1, $mday, $hour, $min, $sec);
+		$last_ts_sec = $ev_unixtime;
+	}
 
 	if ($g_stdin) {
 		$s_output = $loop;
@@ -2009,7 +2038,8 @@ while ($loop = &getLine()) {
 			$start_parse_time = $ev_unixtime;
 		}
 	} else {
-		if(IO::Select->new($s_socket)->can_read(2)) {  # 2 second timeout
+		$s_output = "";
+		if ($s_select && $s_select->can_read(2)) {  # 2 second timeout
 			$s_socket->recv($s_output, 1024);
 			$s_output = decode( 'utf8', $s_output );
 			$timeout = 0;
@@ -2020,7 +2050,7 @@ while ($loop = &getLine()) {
 			}    
 		}
 
-		if (($s_output =~ /^.*PROXY Key=(.+?)\s+([^ ]+?)PROXY.+/) && $proxy_key ne "") {
+		if ($timeout == 0 && ($s_output =~ /^.*PROXY Key=(.+?)\s+([^ ]+?)PROXY.+/) && $proxy_key ne "") {
 			$rproxy_key = $1;
 			$s_addr = $2;
 
@@ -2050,7 +2080,7 @@ while ($loop = &getLine()) {
 				$s_output = "";
 				next;
 			}
-		} else {
+		} elsif ($timeout == 0) {
 			# Reset the proxy stuff and use it as "normal"
 			$rproxy_key = "";
 			$proxy_s_peerhost = "";
@@ -2336,13 +2366,9 @@ while ($loop = &getLine()) {
 
 		if (!$g_servers{$s_addr}->{"srv_players"})
 		{
-			$g_servers{$s_addr}->{"srv_players"} = ();
-			%g_players=();
+			$g_servers{$s_addr}->{"srv_players"} = {};
 		}
-		else
-		{	
-			%g_players=%{$g_servers{$s_addr}->{"srv_players"}};
-		}
+		*g_players = $g_servers{$s_addr}->{"srv_players"};
 		
 		# Get the datestamp (or complain)
 		#if ($s_output =~ s/^.*L (\d\d)\/(\d\d)\/(\d{4}) - (\d\d):(\d\d):(\d\d):\s*//)
@@ -3510,10 +3536,11 @@ EOT
 				}
 			}
 			
+			my $force_log = ($ev_type == 1 || $ev_type == 2 || $ev_type == 3 || $ev_type == 14 || $ev_type == 19 || $ev_type == 20 || $ev_type == 21 || $ev_type == 600) ? 1 : 0;
 			if ($ev_status ne "") {
-				&printEvent($ev_type, $ev_status);
+				&printEvent($ev_type, $ev_status, 0, $force_log);
 			} else {
-				&printEvent($ev_type, "BAD DATA: $s_output");
+				&printEvent($ev_type, "BAD DATA: $s_output", 0, 1);
 			}
 		} elsif (($s_output =~ /^Banid: "(.+?(?:<.+?>)*)" was (?:kicked and )?banned "for ([0-9]+).00 minutes" by "Console"$/) ||
 				($s_output =~ /^Banid: "(.+?(?:<.+?>)*)" was (?:kicked and )?banned "(permanently)" by "Console"$/)) {
@@ -3571,15 +3598,18 @@ EOT
 		}
 		
 		if (!$g_stdin && defined($g_servers{$s_addr}) && $ev_daemontime > $g_servers{$s_addr}->{next_plyr_flush}) {
-			&printEvent("MYSQL", "Flushing player updates to database...",1);
+			my $flushed_count = 0;
 			if ($g_servers{$s_addr}->{"srv_players"}) {
 				while ( my($pl, $player) = each(%{$g_servers{$s_addr}->{"srv_players"}}) ) {
 					if ($player->{needsupdate}) {
 						$player->flushDB();
+						$flushed_count++;
 					}
 				}
 			}
-			&printEvent("MYSQL", "Flushing player updates to database is complete.",1);
+			if ($flushed_count > 0 || $g_debug > 1) {
+				&printEvent("MYSQL", "Flushed $flushed_count player update(s) to database for $s_addr", 1, 1);
+			}
 			
 			$g_servers{$s_addr}->{next_plyr_flush} = $ev_daemontime + 15+int(rand(15));
 		}
@@ -3608,79 +3638,74 @@ EOT
 		$s_addr = "";
 	}
 
-	while( my($server) = each(%g_servers))
-	{	
-		if($g_servers{$server}->{next_timeout}<$ev_daemontime)
-		{
-			#print "checking $ev_unixtime\n";
-			# Clean up
-			# look
-			if($g_servers{$server}->{"srv_players"})
+	if ($g_stdin || $ev_daemontime != $last_housekeeping_time) {
+		$last_housekeeping_time = $ev_daemontime;
+
+		while( my($server) = each(%g_servers))
+		{	
+			if($g_servers{$server}->{next_timeout}<$ev_daemontime)
 			{
-				my %players_temp=%{$g_servers{$server}->{"srv_players"}};
-				while ( my($pl, $player) = each(%players_temp) ) {
-					my $timeout = 250; # 250;
-					if ($g_mode eq "LAN")  {
-						$timeout = $timeout * 2;
-					}
-					#if (($player->{is_bot} == 0) && (($ev_unixtime - $player->get("timestamp")) > ($timeout - 20))) {
-					#	&printEvent(400, $player->getInfoString()." is ".($ev_unixtime - $player->get("timestamp"))."s idle");
-					#}  
-					my $userid = $player->{userid};
-					my $uniqueid = $player->{uniqueid};
-					if ( ($ev_daemontime - $player->{timestamp}) > $timeout ) {
-						#printf("%s - %s %s\n",$server, $player->{userid}, $player->{uniqueid});
-						# we delete any player who is inactive for over $timeout sec
-						# - they probably disconnected silently somehow.
-						if (($player->{is_bot} == 0) || ($g_stdin)) {
-							&printEvent(400, "Auto-disconnecting " . $player->getInfoString() ." for idling (" . ($ev_daemontime - $player->{timestamp}) . " sec) on server (".$server.")");
-							removePlayer($server, $userid, $uniqueid);
+				if($g_servers{$server}->{"srv_players"})
+				{
+					my %players_temp=%{$g_servers{$server}->{"srv_players"}};
+					while ( my($pl, $player) = each(%players_temp) ) {
+						my $timeout = 250; # 250;
+						if ($g_mode eq "LAN")  {
+							$timeout = $timeout * 2;
+						}
+						my $userid = $player->{userid};
+						my $uniqueid = $player->{uniqueid};
+						if ( ($ev_daemontime - $player->{timestamp}) > $timeout ) {
+							if (($player->{is_bot} == 0) || ($g_stdin)) {
+								&printEvent(400, "Auto-disconnecting " . $player->getInfoString() ." for idling (" . ($ev_daemontime - $player->{timestamp}) . " sec) on server (".$server.")");
+								removePlayer($server, $userid, $uniqueid);
+							}
 						}
 					}
 				}
+				$g_servers{$server}->{next_timeout}=$ev_daemontime+30+rand(30);
 			}
-			$g_servers{$server}->{next_timeout}=$ev_daemontime+30+rand(30);
-		}
-		
-		if ($ev_daemontime > $g_servers{$server}->{next_flush}
-			&& $g_servers{$server}->{needsupdate}
-			)
-		{
-			$g_servers{$server}->flushDB();
-			$g_servers{$server}->{next_flush} = $ev_daemontime + 20;
-		}
-	}
-
-	while ( my($pl, $player) = each(%g_preconnect) ) {
-		my $timeout = 600;
-		if ( ($ev_unixtime - $player->{"timestamp"}) > $timeout ) {
-			&printEvent(401, "Clearing pre-connect entry with key ".$pl);
-			delete($g_preconnect{$pl});
-		}
-	}
-	
-	if ($g_stdin == 0) {
-		# Track the Trend
-		if ($g_track_stats_trend > 0) {
-			track_hlstats_trend();
-		}  
-		while (my($addr, $server) = each(%g_servers)) {
-			if (defined($server)) {
-				$server->track_server_load();
-			}
-		}
-		
-		while( my($table) = each(%g_eventtable_data))
-		{
-			if ($g_eventtable_data{$table}{lastflush} + 30 < $ev_daemontime)
+			
+			if ($ev_daemontime > $g_servers{$server}->{next_flush}
+				&& $g_servers{$server}->{needsupdate}
+				)
 			{
-				flushEventTable($table);
+				$g_servers{$server}->flushDB();
+				$g_servers{$server}->{next_flush} = $ev_daemontime + 20;
+			}
+		}
+
+		while ( my($pl, $player) = each(%g_preconnect) ) {
+			my $timeout = 600;
+			if ( ($ev_unixtime - $player->{"timestamp"}) > $timeout ) {
+				&printEvent(401, "Clearing pre-connect entry with key ".$pl);
+				delete($g_preconnect{$pl});
 			}
 		}
 		
-		if (defined($g_servers{$s_addr})) {
-			if (($g_servers{$s_addr}->{map} eq "") && (($timeout > 0) && ($timeout % 60 == 0))) {
-				$g_servers{$s_addr}->get_map();
+		if ($g_stdin == 0) {
+			# Track the Trend
+			if ($g_track_stats_trend > 0) {
+				track_hlstats_trend();
+			}  
+			while (my($addr, $server) = each(%g_servers)) {
+				if (defined($server)) {
+					$server->track_server_load();
+				}
+			}
+			
+			while( my($table) = each(%g_eventtable_data))
+			{
+				if ($g_eventtable_data{$table}{lastflush} + 30 < $ev_daemontime)
+				{
+					flushEventTable($table);
+				}
+			}
+			
+			if (defined($g_servers{$s_addr})) {
+				if (($g_servers{$s_addr}->{map} eq "") && (($timeout > 0) && ($timeout % 60 == 0))) {
+					$g_servers{$s_addr}->get_map();
+				}
 			}
 		}
 	}  

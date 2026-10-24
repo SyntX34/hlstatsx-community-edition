@@ -930,16 +930,12 @@ sub doEvent_RoleSelection
 				$player->{playerid},
 				$role
 			);
-			my $query = "
-				UPDATE
-					hlstats_Roles
-				SET
-					picked=picked+1
-				WHERE 
-					game='" . &quoteSQL($g_servers{$s_addr}->{game}) . "'
-					AND code='" . &quoteSQL($role) . "'
-				";                    
-			&execNonQuery($query);
+			&execCached(
+				"update_role_picked",
+				"UPDATE hlstats_Roles SET picked=picked+1 WHERE game=? AND code=?",
+				$g_servers{$s_addr}->{game},
+				$role
+			);
 			$player->updateDB();
 		}
 	}
@@ -1184,29 +1180,21 @@ sub doEvent_Frag
 					);
 
 					if ($killer->{role} ne "") {
-						my $query = "
-							UPDATE
-								hlstats_Roles
-							SET
-								kills=kills+1
-							WHERE 
-								game='" . &quoteSQL($g_servers{$s_addr}->{game}) . "'
-								AND code='" . &quoteSQL($killer->{role}) . "'
-							";
-						&execNonQuery($query);
+						&execCached(
+							"update_role_kills",
+							"UPDATE hlstats_Roles SET kills=kills+1 WHERE game=? AND code=?",
+							$g_servers{$s_addr}->{game},
+							$killer->{role}
+						);
 					}
 
 					if ($victim->{role} ne "") {
-						my $query = "
-							UPDATE
-								hlstats_Roles
-							SET
-								deaths=deaths+1
-							WHERE 
-								game='" . &quoteSQL($g_servers{$s_addr}->{game}) . "'
-								AND code='" . &quoteSQL($victim->{role}) . "'
-							";
-						&execNonQuery($query);
+						&execCached(
+							"update_role_deaths",
+							"UPDATE hlstats_Roles SET deaths=deaths+1 WHERE game=? AND code=?",
+							$g_servers{$s_addr}->{game},
+							$victim->{role}
+						);
 					}
 
 					$killer->increment("total_kills");
@@ -1311,22 +1299,23 @@ sub doEvent_Frag
 					$victim->increment("session_deaths");
 					$victim->increment("session_skill", $v_skill);
 
-					my $query = "
-						UPDATE
-							hlstats_Weapons
-						SET	
-							$update_data 
-						WHERE
-							game='" . &quoteSQL($g_servers{$s_addr}->{game}) . "'
-							AND code='" . &quoteSQL($weapon) . "'
-					";
-					&execNonQuery($query);
+					my $hs_inc = ($headshot == 1) ? 1 : 0;
+					&execCached(
+						"update_weapon_kills",
+						"UPDATE hlstats_Weapons SET kills=kills+1, headshots=headshots+? WHERE game=? AND code=?",
+						$hs_inc,
+						$g_servers{$s_addr}->{game},
+						$weapon
+					);
 					
-					$query = "
-						INSERT INTO hlstats_Maps_Counts (game, map, kills, headshots)
-						VALUES ('".&quoteSQL($g_servers{$s_addr}->{game})."', '".&quoteSQL($g_servers{$s_addr}->get_map())."', 1, $headshot)
-						ON DUPLICATE KEY UPDATE kills=kills+1".(($headshot)?", headshots=headshots+1":"");
-					&execNonQuery($query);
+					&execCached(
+						"upsert_map_counts",
+						"INSERT INTO hlstats_Maps_Counts (game, map, kills, headshots) VALUES (?, ?, 1, ?) ON DUPLICATE KEY UPDATE kills=kills+1, headshots=headshots+?",
+						$g_servers{$s_addr}->{game},
+						$g_servers{$s_addr}->get_map(),
+						$hs_inc,
+						$hs_inc
+					);
 					
 					if ($g_servers{$s_addr}->{play_game} == L4D()) {
 						if ($victim->{team} eq "Infected" && $victim->{role} ne "infected" && $victim->{role} ne "") {
@@ -1405,20 +1394,14 @@ sub doEvent_Frag
 					}					
 				}
 
-				$update_data = "kills=kills+1";
-				if ($headshot == 1) {
-					$update_data .= ", headshots=headshots+1";
-				}
-				my $query = "
-					UPDATE
-						hlstats_Weapons
-					SET	
-						$update_data 
-					WHERE
-						game='" . &quoteSQL($g_servers{$s_addr}->{game}) . "'
-						AND code='" . &quoteSQL($weapon) . "'
-				";
-				&execNonQuery($query);
+				my $tk_hs_inc = ($headshot == 1) ? 1 : 0;
+				&execCached(
+					"update_weapon_kills",
+					"UPDATE hlstats_Weapons SET kills=kills+1, headshots=headshots+? WHERE game=? AND code=?",
+					$tk_hs_inc,
+					$g_servers{$s_addr}->{game},
+					$weapon
+				);
 				$desc = "TEAMKILL: ";
 			}
 		}
@@ -1556,16 +1539,12 @@ sub doEvent_PlayerPlayerAction
 					$vz
 				);
 				
-				my $query = "
-					UPDATE
-						hlstats_Actions
-					SET
-						count=count+1 
-					WHERE
-						game='" . &quoteSQL($g_servers{$s_addr}->{game}) . "'
-						AND code = '".&quoteSQL($action)."'
-				";
-				&execNonQuery($query);
+				&execCached(
+					"update_action_count",
+					"UPDATE hlstats_Actions SET count=count+1 WHERE game=? AND code=?",
+					$g_servers{$s_addr}->{game},
+					$action
+				);
 				if ($reward_player != 0) {
 					my $victimreward = $reward_player * -1;
 					$player->increment("skill", $reward_player, 1);
@@ -1824,16 +1803,12 @@ sub doEvent_PlayerAction
 					$y,
 					$z
 				);
-				my $query = "
-					UPDATE
-						hlstats_Actions
-					SET	
-						count=count+1 
-					WHERE
-						game='" . &quoteSQL($g_servers{$s_addr}->{game}) . "'
-						AND code = '".&quoteSQL($action)."'
-				";
-				&execNonQuery($query);
+				&execCached(
+					"update_action_count",
+					"UPDATE hlstats_Actions SET count=count+1 WHERE game=? AND code=?",
+					$g_servers{$s_addr}->{game},
+					$action
+				);
 				$player->increment("skill", $reward_player);
 				$player->increment("session_skill", $reward_player);
 				$p_name = $player->{name};
@@ -1911,16 +1886,13 @@ sub doEvent_TeamAction
 				$actionteam = $team;
 			}
 			#print "T: ".$actionid." - ".$actionname." - ".$actionteam." - ".$reward_player." - ".$reward_team." - ".$team."\n";
-			my $query = "
-				UPDATE
-					hlstats_Actions
-				SET	
-					count=count+1 
-				WHERE
-					game='" . &quoteSQL($g_servers{$s_addr}->{game}) . "'
-					AND code IN ('" . &quoteSQL($g_servers{$s_addr}->get_map() . "_$action") . "', '" . &quoteSQL($action) . "')
-			";
-			&execNonQuery($query);
+			&execCached(
+				"update_action_count_in",
+				"UPDATE hlstats_Actions SET count=count+1 WHERE game=? AND code IN (?, ?)",
+				$g_servers{$s_addr}->{game},
+				$g_servers{$s_addr}->get_map() . "_$action",
+				$action
+			);
 			
 			if ($g_servers{$s_addr}->{round_status} == 0) {
 				if ($reward_team != 0) {
@@ -1978,16 +1950,13 @@ sub doEvent_WorldAction
 			my $actionid = $g_games{$g_servers{$s_addr}->{game}}{actions}{$action}{id};
 			my $reward_team = $g_games{$g_servers{$s_addr}->{game}}{actions}{$action}{reward_team};
 			my $team = $g_games{$g_servers{$s_addr}->{game}}{actions}{$action}{team};
-			my $query = "
-				UPDATE
-					hlstats_Actions
-				SET	
-					count=count+1 
-				WHERE
-					game='" . &quoteSQL($g_servers{$s_addr}->{game}) . "'
-					AND code IN ('".&quoteSQL($map."_$action")."', '".&quoteSQL($action)."')
-			";
-			&execNonQuery($query);
+			&execCached(
+				"update_action_count_in",
+				"UPDATE hlstats_Actions SET count=count+1 WHERE game=? AND code IN (?, ?)",
+				$g_servers{$s_addr}->{game},
+				$map."_$action",
+				$action
+			);
 			if ($team && $reward_team != 0) {
 				&rewardTeam($team, $reward_team, $actionid, $actionname);
 			}

@@ -42,7 +42,10 @@ For support and installation notes visit http://www.hlxcommunity.com
 
 	// Ribbon Statistics
 
-	$ribbon =  valid_request($_GET['ribbon'], true) or error('No ribbon ID specified.');
+	$ribbon = valid_request($_GET['ribbon'] ?? 0, true);
+	if ($ribbon <= 0) {
+		error('No ribbon ID specified.');
+	}
 
 	$db->query("
 		SELECT
@@ -58,12 +61,13 @@ For support and installation notes visit http://www.hlxcommunity.com
 	
 	$actiondata = $db->fetch_array();
 	$db->free_result();
-	$act_name = $actiondata['ribbonName'];
-	$awardmin = $actiondata['awardCount'];
-	$awardcode = $actiondata['awardCode'];
-	$image = $actiondata['image'];
+	$act_name = $actiondata['ribbonName'] ?? '';
+	$awardmin = intval($actiondata['awardCount'] ?? 0);
+	$awardcode = $db->escape($actiondata['awardCode'] ?? '');
+	$image = $actiondata['image'] ?? '';
+	$game_escaped = $db->escape($game);
 
-	$db->query("SELECT name FROM hlstats_Games WHERE code='$game'");
+	$db->query("SELECT name FROM hlstats_Games WHERE code='$game_escaped'");
 	if ($db->num_rows() < 1) {
 		error("No such game '$game'.");
 	}

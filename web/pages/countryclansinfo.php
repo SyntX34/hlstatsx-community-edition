@@ -42,7 +42,13 @@ For support and installation notes visit http://www.hlxcommunity.com
 
 	// Country Details
 	
-	$flag = valid_request($_GET['flag'], false) or error('No country ID specified.');
+	$flag = valid_request($_GET['flag'] ?? '', false);
+	if (!$flag) {
+		error('No country ID specified.');
+	}
+	$flag = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)$flag);
+	$flag_escaped = $db->escape($flag);
+	$game_escaped = $db->escape($game);
 
 	$SQL = "
 		SELECT
@@ -63,8 +69,8 @@ For support and installation notes visit http://www.hlxcommunity.com
 			hlstats_Players.flag=hlstats_Countries.flag
 			)
 		WHERE
-			hlstats_Players.game='$game'
-			AND hlstats_Players.flag='$flag'
+			hlstats_Players.game='$game_escaped'
+			AND hlstats_Players.flag='$flag_escaped'
 			AND hlstats_Players.hideranking = 0
 			AND activity >= 0
 		GROUP BY
@@ -309,9 +315,9 @@ For support and installation notes visit http://www.hlxcommunity.com
 		FROM
 			hlstats_Players
 		WHERE
-			flag='$flag'
+			flag='$flag_escaped'
 			AND hlstats_Players.hideranking = 0
-			AND hlstats_Players.game='$game'      
+			AND hlstats_Players.game='$game_escaped'      
 		GROUP BY
 			hlstats_Players.playerId
 		HAVING
@@ -330,9 +336,9 @@ For support and installation notes visit http://www.hlxcommunity.com
 		FROM
 			hlstats_Players
 		WHERE
-			flag='$flag'
+			flag='$flag_escaped'
 			AND hlstats_Players.hideranking = 0
-			AND hlstats_Players.game='$game'      
+			AND hlstats_Players.game='$game_escaped'      
 		GROUP BY
 			hlstats_Players.playerId
 		HAVING

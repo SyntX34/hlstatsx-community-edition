@@ -449,12 +449,12 @@ while ($server->recv($datagram,1024,$flags)) {
 			$datagram =~ s/^.*RL /RL /g;
 
 			&printEvent("NOTICE", "Sending $datagram to daemon $srv_list{$ipaddr}{$ipport}{'dest_ip'}:$srv_list{$ipaddr}{$ipport}{'dest_port'}", 1) if ($g_debug > 1);	
-			# Sedning actual message to the daemon.
-			my $forward = IO::Socket::INET->new(	Proto=>"udp",
-								PeerHost=>$srv_list{$ipaddr}{$ipport}{'dest_ip'},
-								PeerPort=>$srv_list{$ipaddr}{$ipport}{'dest_port'}
-							);
-			$forward->send("PROXY Key=$proxy_key $ipaddr:".$ipport."PROXY $datagram");
+			# Sending actual message to the daemon using the existing UDP socket.
+			my $dest_addr = inet_aton($srv_list{$ipaddr}{$ipport}{'dest_ip'});
+			if ($dest_addr) {
+				my $dest = sockaddr_in($srv_list{$ipaddr}{$ipport}{'dest_port'}, $dest_addr);
+				send($server, "PROXY Key=$proxy_key $ipaddr:".$ipport."PROXY $datagram", 0, $dest);
+			}
 		}
 	}
 }

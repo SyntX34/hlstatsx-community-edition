@@ -3,6 +3,15 @@
 	if (!defined('IN_HLSTATS')) {
 		die('Do not access this file directly.');
 	}
+
+	if (
+		!((PHP_VERSION_ID >= 80235 && PHP_VERSION_ID < 80300) ||
+		  (PHP_VERSION_ID >= 80336 && PHP_VERSION_ID < 80400) ||
+		  (PHP_VERSION_ID >= 80427 && PHP_VERSION_ID < 80500) ||
+		  (PHP_VERSION_ID >= 80512))
+	) {
+		die('HLstatsX:CE requires a patched PHP version (PHP 8.2.35+, 8.3.36+, 8.4.27+, or 8.5.12+). Current version: ' . PHP_VERSION);
+	}
 	
 	if (!file_exists("./updater")) {
 		die('Updater directory is missing.');

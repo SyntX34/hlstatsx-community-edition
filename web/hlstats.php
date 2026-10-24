@@ -157,12 +157,13 @@ $deleteFiles = $cacheCleaner->cleanOldTrendCache(
 ////
 
 $game = valid_request(isset($_GET['game']) ? $_GET['game'] : '', false);
+$game = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)$game);
 
 $realgame = $_SESSION['realgame'] ?? null;
 
 if (!$game)
 {
-	$game = isset($_SESSION['game'])?$_SESSION['game']:'';
+	$game = isset($_SESSION['game']) ? preg_replace('/[^a-zA-Z0-9_-]/', '', (string)$_SESSION['game']) : '';
 }
 else
 {

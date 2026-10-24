@@ -123,13 +123,14 @@ class Auth
 	{
 		global $db;
 
+		$username_escaped = $db->escape($this->username);
 		$db->query("
             SELECT
                 *
             FROM
                 hlstats_Users
             WHERE
-                username = '$this->username'
+                username = '$username_escaped'
             LIMIT 1
         ");
 

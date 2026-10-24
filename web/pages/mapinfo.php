@@ -42,9 +42,14 @@ For support and installation notes visit http://www.hlxcommunity.com
 
 	// Map Details
 	
-	$map = valid_request($_GET['map'], false) or error('No map specified.');
+	$map = valid_request($_GET['map'] ?? '', false);
+	if (!$map) {
+		error('No map specified.');
+	}
+	$map_escaped = $db->escape($map);
+	$game_escaped = $db->escape($game);
 	
-	$db->query("SELECT name FROM hlstats_Games WHERE code='$game'");
+	$db->query("SELECT name FROM hlstats_Games WHERE code='$game_escaped'");
 	if ($db->num_rows() != 1) {
 		error('Invalid or no game specified.');
 	} else {
@@ -106,8 +111,8 @@ For support and installation notes visit http://www.hlxcommunity.com
 			hlstats_Players		
 		WHERE
 			hlstats_Players.playerId = hlstats_Events_Frags.killerId
-			AND hlstats_Events_Frags.map='$map'
-			AND hlstats_Players.game='$game'
+			AND hlstats_Events_Frags.map='$map_escaped'
+			AND hlstats_Players.game='$game_escaped'
 			AND hlstats_Players.hideranking<>'1'
 		GROUP BY
 			hlstats_Events_Frags.killerId
@@ -120,14 +125,14 @@ For support and installation notes visit http://www.hlxcommunity.com
 	$resultCount = $db->query("
 		SELECT
 			COUNT(DISTINCT hlstats_Events_Frags.killerId),
-			SUM(hlstats_Events_Frags.map='$map')
+			SUM(hlstats_Events_Frags.map='$map_escaped')
 		FROM
 			hlstats_Events_Frags,
 		  hlstats_Servers
 		WHERE
 			hlstats_Servers.serverId = hlstats_Events_Frags.serverId
-			AND hlstats_Events_Frags.map='$map'
-			AND hlstats_Servers.game='$game'
+			AND hlstats_Events_Frags.map='$map_escaped'
+			AND hlstats_Servers.game='$game_escaped'
 	");
 	
 	list($numitems, $totalkills) = $db->fetch_row($resultCount);

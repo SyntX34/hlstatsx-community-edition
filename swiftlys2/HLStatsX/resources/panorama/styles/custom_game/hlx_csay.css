@@ -50,5 +50,6 @@
     color: #ffb84d;
     text-shadow: 0px 2px 8px 3.0 rgba(0, 0, 0, 0.9);
     letter-spacing: 0.5px;
+    text-overflow: shrink;
     hittest: false;
 }

@@ -49,9 +49,9 @@ For support and installation notes visit http://www.hlxcommunity.com
 		{
 			global $g_options;
 
-			$this->query = trim($query);
-			$this->type = $type;
-			$this->game = $game;
+			$this->query = trim((string)($query ?? ''));
+			$this->type = (string)($type ?? 'player');
+			$this->game = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)($game ?? ''));
 
 			if ($g_options['Mode'] == 'LAN')
 			{
@@ -158,6 +158,8 @@ For support and installation notes visit http://www.hlxcommunity.com
 			$sr_query = preg_replace('/^STEAM_\d+?\:/i','',$this->query);
 			$sr_query = $db->escape($sr_query);
 			$sr_query = preg_replace('/\s/', '%', $sr_query);
+			$game_escaped = $db->escape($this->game);
+			$numitems = 0;
 			if ($this->type == 'player')
 			{
 				$table = new Table
@@ -195,7 +197,7 @@ For support and installation notes visit http://www.hlxcommunity.com
 					'asc'
 				);
 				if ($this->game)
-					$andgame = "AND hlstats_Players.game='" . $this->game . "'";
+					$andgame = "AND hlstats_Players.game='" . $game_escaped . "'";
 				else
 					$andgame = '';
 				$result = $db->query
@@ -292,7 +294,7 @@ For support and installation notes visit http://www.hlxcommunity.com
 					'asc'
 				);
 				if ($this->game)
-					$andgame = "AND hlstats_PlayerUniqueIds.game='" . $this->game . "'";
+					$andgame = "AND hlstats_PlayerUniqueIds.game='" . $game_escaped . "'";
 				else
 					$andgame = '';
 				$result = $db->query
@@ -382,7 +384,7 @@ For support and installation notes visit http://www.hlxcommunity.com
 					'asc'
 				);
 				if ($this->game)
-					$andgame = "AND hlstats_Players.game='" . $this->game . "'";
+					$andgame = "AND hlstats_Players.game='" . $game_escaped . "'";
 				else
 					$andgame = '';
 				$result = $db->query
@@ -497,7 +499,7 @@ For support and installation notes visit http://www.hlxcommunity.com
 					'asc'
 				);
 				if ($this->game)
-					$andgame = "AND hlstats_Clans.game='" . $this->game . "'";
+					$andgame = "AND hlstats_Clans.game='" . $game_escaped . "'";
 				else
 					$andgame = "";
 				$result = $db->query

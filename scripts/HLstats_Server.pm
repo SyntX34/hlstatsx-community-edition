@@ -38,7 +38,6 @@ use POSIX;
 use IO::Socket;
 use Socket;
 use Encode;
-use Syntax::Keyword::Try;
 
 do "$::opt_libdir/HLstats_GameConstants.plib";
 
@@ -418,22 +417,29 @@ sub dorcon
 
 	if ($self->{mod} eq "SWIFTLYS2" || $self->{play_game} == CS2()) {
 		$command =~ s/;//g;
-		&::printNotice("SWIFTLYS2_UDP", $command, 1);
 		my $target_ip   = $self->{address};
-		my $target_port = ($self->{plugin_port} > 0) ? $self->{plugin_port} : $self->{port};
+		my $target_port = ($self->{plugin_port} > 0) ? $self->{plugin_port} : ($self->{port} + 1);
+		&::printEvent("SWS2_TX", "-> $target_ip:$target_port : $command", 1, 1);
 		if ($target_ip ne "" && $target_port > 0) {
 			eval {
-				my $udp_sock = IO::Socket::INET->new(
-					Proto    => 'udp',
-					PeerAddr => $target_ip,
-					PeerPort => $target_port
-				);
-				if ($udp_sock) {
+				if (!$self->{sws2_udp_sock} || $self->{sws2_udp_port} != $target_port) {
+					$self->{sws2_udp_sock} = IO::Socket::INET->new(
+						Proto    => 'udp',
+						PeerAddr => $target_ip,
+						PeerPort => $target_port
+					);
+					$self->{sws2_udp_port} = $target_port;
+				}
+				if ($self->{sws2_udp_sock}) {
 					my $payload = "HLX_CMD " . $command;
-					$udp_sock->send($payload);
-					$udp_sock->close();
+					$self->{sws2_udp_sock}->send($payload);
+				} else {
+					&::printEvent("SWS2_ERR", "Failed to open UDP socket to $target_ip:$target_port: $!", 1, 1);
 				}
 			};
+			if ($@) {
+				&::printEvent("SWS2_ERR", "UDP send exception to $target_ip:$target_port: $@", 1, 1);
+			}
 		}
 		return 1;
 	}
@@ -556,26 +562,23 @@ sub track_server_load
 		{
 			if ($last_timestamp+299 < $new_timestamp)
 			{
-				# fetch fps and uptime via rcon
-				
-				# Old style stats output:
-				#$string = "          0.00  0.00  0.00      54     1  249.81       0 dhjdsk";
+				my $uptime = 0;
+				my $fps = 0;
 
-				# New style stats output:
-				#CPU    In (KB/s)  Out (KB/s)  Uptime  Map changes  FPS      Players  Connects
-				#0.00   0.00       0.00        0      0            00.00    0        0
+				if ($self->{mod} ne "SWIFTLYS2" && $self->{play_game} != CS2()) {
+					$string = $self->dorcon("stats");
+					if (defined($string) && $string ne "") {
+						# Remove first line of output
+						$string =~ /CPU.*\n(.*)\n*L{0,1}.*\Z/;
+						$string = $1;
 
-
-				$string = $self->dorcon("stats");
-
-				# Remove first line of output
-				$string =~ /CPU.*\n(.*)\n*L{0,1}.*\Z/;
-				$string = $1;
-
-				# Grab FPS and Uptime from the output
-				$string =~ /([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s*([^ ]*)/;
-				$uptime = $4;
-				$fps = $6;
+						# Grab FPS and Uptime from the output
+						if (defined($string) && $string =~ /([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s+([^ ]+)\s*([^ ]*)/) {
+							$uptime = $4;
+							$fps = $6;
+						}
+					}
+				}
 
 				my $act_players  = $self->{numplayers};
 				my $max_players  = $self->{maxplayers};
@@ -619,7 +622,7 @@ sub dostats
 	my $rcon_obj = $self->{rcon_obj};
 	$rcmd = $self->{broadcasting_command_announce};
 
-	if (($::g_stdin == 0) && ($rcon_obj) && ($self->{rcon} ne ""))  
+	if (($::g_stdin == 0) && (($rcon_obj && $self->{rcon} ne "") || $self->{mod} eq "SWIFTLYS2" || $self->{play_game} == CS2()))  
 	{
 		if ($self->{broadcasting_events} == 1)
 		{
@@ -639,6 +642,10 @@ sub dostats
 sub get_map
 {
 	my ($self, $fromupdate) = @_;
+
+	if ($self->{mod} eq "SWIFTLYS2" || $self->{play_game} == CS2()) {
+		return $self->{map};
+	}
 
 	if ($::g_stdin == 0) {
 		if ((time() - $self->{last_check})>120) {
@@ -714,6 +721,10 @@ sub get_map
 sub update_players_pings
 {
 	my ($self) = @_;
+
+	if ($self->{mod} eq "SWIFTLYS2" || $self->{play_game} == CS2()) {
+		return;
+	}
 
 	if ($self->{num_trackable_players} < $self->{minplayers}) 
 	{
@@ -1181,7 +1192,7 @@ sub flushDB
 			serverId=?
 	";
 	my @vals = (
-		&::quoteSQL($self->{name}),
+		$self->{name},
 		$self->{rounds},
 		$self->{kills},
 		$self->{suicides},
@@ -1193,7 +1204,7 @@ sub flushDB
 		$self->{ts_wins},
 		$self->{numplayers},
 		$self->{maxplayers},
-		&::quoteSQL($self->{map}),
+		$self->{map},
 		$self->{map_rounds},
 		$self->{map_ct_wins},
 		$self->{map_ts_wins},
@@ -1296,8 +1307,8 @@ sub update_server_loc
 
 		my $geoCity = undef;
 
-		try { $geoCity = $::g_gi->city( ip => $server_ip ); }
-		catch { $geoCity = undef; }
+		eval { $geoCity = $::g_gi->city( ip => $server_ip ); };
+		if ($@) { $geoCity = undef; }
 
 		if ($geoCity) {
 

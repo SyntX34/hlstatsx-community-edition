@@ -52,6 +52,7 @@ For support and installation notes visit http://www.hlxcommunity.com
 		}
 
 		$uniqueid = preg_replace('/^STEAM_\d+?\:/i','',$uniqueid);
+		$uniqueid_escaped = $db->escape($uniqueid);
 
         $db->query("
 			SELECT
@@ -59,7 +60,7 @@ For support and installation notes visit http://www.hlxcommunity.com
 			FROM
 				hlstats_PlayerUniqueIds
 			WHERE
-				hlstats_PlayerUniqueIds.uniqueId = '$uniqueid'
+				hlstats_PlayerUniqueIds.uniqueId = '$uniqueid_escaped'
 		");
 
 		if ($db->num_rows() > 1) {
@@ -213,10 +214,10 @@ $db->query("
 	}
 
 	if (isset($_GET['type']) && $_GET['type'] == 'ajax') {
-		$tabs = explode('_', preg_replace('[^a-z]', '', $_GET['tab']));
+		$tabs = explode('_', preg_replace('/[^a-z_]/i', '', (string)($_GET['tab'] ?? '')));
 
 		foreach ($tabs as $tab) {
-			if (file_exists(PAGE_PATH . "/playerinfo_$tab.php")) {
+			if ($tab !== '' && file_exists(PAGE_PATH . "/playerinfo_$tab.php")) {
 				@include(PAGE_PATH . "/playerinfo_$tab.php");
 			}
 		}

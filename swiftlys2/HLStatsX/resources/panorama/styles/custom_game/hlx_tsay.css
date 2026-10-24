@@ -44,12 +44,13 @@
     text-align: left;
     horizontal-align: left;
 
-    font-family: Verdana, Stratum2 Bold, 'Arial Unicode MS', Tahoma, sans-serif;
+    font-family: Stratum2 Bold, 'Arial Unicode MS', Tahoma, sans-serif;
     font-size: 20px;
     font-weight: bold;
 
     color: #55cdfc;
     text-shadow: 0px 2px 6px 2.5 rgba(0, 0, 0, 0.9);
     letter-spacing: 0.5px;
+    text-overflow: shrink;
     hittest: false;
 }

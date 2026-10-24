@@ -39,7 +39,6 @@ package HLstats_Player;
 #
 
 use Encode;
-use Syntax::Keyword::Try;
 
 do "$::opt_libdir/HLstats_GameConstants.plib";
 
@@ -961,8 +960,8 @@ sub geoLookup
 			
 			my $geoCity = undef;
 	
-			try { $geoCity = $::g_gi->city( ip => $ip_address ); }
-			catch { $geoCity = undef; }
+			eval { $geoCity = $::g_gi->city( ip => $ip_address ); };
+			if ($@) { $geoCity = undef; }
 
 			if ($geoCity) {
 
@@ -1096,7 +1095,7 @@ sub getRank
 				)
 		";
 		my @vals = (
-			&::quoteSQL($self->{game}),
+			$self->{game},
 			$self->{skill},
 			$self->{skill},
 			$kpd
@@ -1123,7 +1122,7 @@ sub getRank
 				)
 		";
 		my @vals = (
-			&::quoteSQL($self->{game}),
+			$self->{game},
 			$kills,
 			$kills,
 			$kpd

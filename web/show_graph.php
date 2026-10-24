@@ -133,12 +133,18 @@ For support and installation notes visit http://www.hlxcommunity.com
 
 	$bg_color = array('red' => 171, 'green' => 204, 'blue' => 214);
 	if (isset($_GET['bgcolor']) && is_string($_GET['bgcolor'])) {
-		$bg_color = hex2rgb(valid_request($_GET['bgcolor'], false));
+		$parsed_bg = hex2rgb(valid_request($_GET['bgcolor'], false));
+		if (is_array($parsed_bg)) {
+			$bg_color = $parsed_bg;
+		}
 	}
 
 	$color = array('red' => 255, 'green' => 255, 'blue' => 255);
 	if (isset($_GET['color']) && is_string($_GET['color'])) {
-		$color = hex2rgb(valid_request($_GET['color'], false));
+		$parsed_color = hex2rgb(valid_request($_GET['color'], false));
+		if (is_array($parsed_color)) {
+			$color = $parsed_color;
+		}
 	}
 
 	$bg_id = $bg_color['red'] + $bg_color['green'] + $bg_color['blue'];

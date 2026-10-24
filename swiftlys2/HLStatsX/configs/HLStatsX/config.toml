@@ -1,14 +1,44 @@
 [HLStatsX]
+# Enable verbose debug logging in server console
+Debug = false
+
+# IP address or hostname where your hlstats.pl daemon is listening
 DaemonHost = "127.0.0.1"
+
+# UDP port where your hlstats.pl daemon is listening
 DaemonPort = 27500
-ServerIp = "5.135.143.217"
+
+# Public IP of this CS2 server (as configured in HLstatsX Web Admin -> Servers)
+ServerIp = "127.0.0.1"
+
+# Game port of this CS2 server (as configured in HLstatsX Web Admin -> Servers)
 ServerPort = 27015
+
+# Proxy_Key from HLstatsX Web Admin -> Settings (leave empty if not using proxy key)
+# ProxyKey allows the plugin to spoof the server IP:Port in UDP packets so it works behind NAT/Docker
 ProxyKey = ""
+
+# Maximum player slots reported to HLstatsX daemon on map start
 MaxPlayers = 32
+
+# UDP port where this plugin listens for HLX_CMD commands from the Perl daemon
+# IMPORTANT: Set this to ServerPort + 1 (e.g. 27016 if ServerPort is 27015)
+# Make sure your Server Mod in HLstatsX Web Admin is set to "SWIFTLYS2"
 ReceiverPort = 27016
-# Menu display type: 1 = BuiltIn (Swiftly Menu API), 2 = CustomHud (Panorama XML)
-MenuType = 1
-CustomMenuLayout = "resources/panorama/layout/custom_game/hlx_menu.xml"
-CustomCsayLayout = "resources/panorama/layout/custom_game/hlx_csay.xml"
-CustomTsayLayout = "resources/panorama/layout/custom_game/hlx_tsay.xml"
+
+# Menu rendering style for !hlx / !menu / !hlstatsx:
+# "1" or "BuiltIn"   = SwiftlyS2 Built-In Center Menu
+# "2" or "CustomHud" = Custom Panorama XML HUD (requires Metamod CustomHud addon + resource precache)
+MenuType = "1"
+
+# Seconds before an open HLstatsX menu automatically closes (0 = disable auto-close)
 AutoCloseMenuSeconds = 15
+
+# Panorama layout path when MenuType = "CustomHud"
+CustomMenuLayout = "panorama/layout/custom_game/hlx_menu.xml"
+
+# Panorama layout path for center HUD announcements (hlx_sm_csay)
+CustomCsayLayout = "panorama/layout/custom_game/hlx_csay.xml"
+
+# Panorama layout path for top-left HUD announcements (hlx_sm_tsay)
+CustomTsayLayout = "panorama/layout/custom_game/hlx_tsay.xml"

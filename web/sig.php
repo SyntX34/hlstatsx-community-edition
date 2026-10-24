@@ -64,9 +64,8 @@ foreach ($_SERVER as $key => $entry) {
 }
   
 define('IN_HLSTATS', true);
-header("Content-Type: image/png");
 
-// Load database classes
+/* Load database classes */
 require ('config.php');
 require (INCLUDE_PATH . '/class_db.php');
 require (INCLUDE_PATH . '/functions.php');
@@ -166,7 +165,7 @@ function f_num($number) {
 		");
 		
 		if ($db->num_rows() != 1)
-		error("No such player '$player'.");
+		error("No such player '$steam_id'.");
 		list($player_id) = $db->fetch_row();
 	}
 	
@@ -192,51 +191,49 @@ function f_num($number) {
 		}  
 	}
 
-	////
-	//// Main
-	////
+	if (isset($_GET['color']) && is_string($_GET['color'])) {
+		$color = hex2rgb(valid_request($_GET['color'], false));
+	}
 
-if (isset($_GET['color']) && is_string($_GET['color'])) {
-	$color = hex2rgb(valid_request($_GET['color'], false));
-}
+	if (isset($_GET['caption_color']) && is_string($_GET['caption_color'])) {
+		$caption_color = hex2rgb(valid_request($_GET['caption_color'], false));
+	}
 
-if (isset($_GET['caption_color']) && is_string($_GET['caption_color'])) {
-	$caption_color = hex2rgb(valid_request($_GET['caption_color'], false));
-}
+	if (isset($_GET['link_color']) && is_string($_GET['link_color'])) {
+		$link_color = hex2rgb(valid_request($_GET['link_color'], false));
+	}
 
-if (isset($_GET['link_color']) && is_string($_GET['link_color'])) {
-	$link_color = hex2rgb(valid_request($_GET['link_color'], false));
-}
+	if ($player_id > 0) {
+		$db->query("
+			SELECT
+				playerId, 
+				game, 
+				FROM_UNIXTIME((last_event), '%a %D %b %k:%H') as lastevent, 
+				connection_time,
+				last_skill_change,
+	                        unhex(replace(hex(lastName), 'E280AE', '')) as lastName,
+				country,
+				flag,
+				kills, 
+				deaths, 
+				suicides, 
+				skill, 
+				shots, 
+				hits, 
+				headshots, IFNULL(ROUND(headshots/kills * 100), '-') AS hpk, 
+				IFNULL(kills/deaths, '-') AS kpd, 
+				IFNULL(ROUND((hits / shots * 100), 1), 0.0) AS acc, 
+				activity, 
+				hideranking
+			FROM 
+				hlstats_Players
+			WHERE 
+				playerId='$player_id'
+		");
+		if ($db->num_rows() != 1)
+			error("No such player '$player_id'.");
 
-if ($player_id > 0) {
-	$db->query("
-		SELECT
-			playerId, 
-			game, 
-			FROM_UNIXTIME((last_event), '%a %D %b %k:%H') as lastevent, 
-			connection_time,
-			last_skill_change,
-                        unhex(replace(hex(lastName), 'E280AE', '')) as lastName,
-			country,
-			flag,
-			kills, 
-			deaths, 
-			suicides, 
-			skill, 
-			shots, 
-			hits, 
-			headshots, IFNULL(ROUND(headshots/kills * 100), '-') AS hpk, 
-			IFNULL(kills/deaths, '-') AS kpd, 
-			IFNULL(ROUND((hits / shots * 100), 1), 0.0) AS acc, 
-			activity, 
-			hideranking
-		FROM 
-			hlstats_Players
-		WHERE 
-			playerId='$player_id'
-	");
-	if ($db->num_rows() != 1)
-		error("No such player '$player'.");
+		header("Content-Type: image/png");
 
 	$playerdata = $db->fetch_array();
 	$db->free_result();

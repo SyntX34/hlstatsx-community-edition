@@ -44,7 +44,10 @@ For support and installation notes visit http://www.hlxcommunity.com
 
 	// Addon created by Rufus (rufus@nonstuff.de)
 	
-	$action = valid_request($_GET['action'], false) or error('No action ID specified.');
+	$action = valid_request($_GET['action'] ?? '', false);
+	if (!$action) {
+		error('No action ID specified.');
+	}
 
 	$action_escaped=$db->escape($action);
 	$game_escaped=$db->escape($game);

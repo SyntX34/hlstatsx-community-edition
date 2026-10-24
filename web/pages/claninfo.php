@@ -42,7 +42,10 @@
 	
 	// Clan Details
 	
-	$clan = valid_request(intval($_GET["clan"]), true) or error("No clan ID specified.");
+	$clan = valid_request(intval($_GET["clan"] ?? 0), true);
+	if ($clan <= 0) {
+		error("No clan ID specified.");
+	}
 
 	$db->query("
 		SELECT
@@ -109,11 +112,11 @@
 	}
 
     if (!empty($_GET['type']) && $_GET['type'] == 'ajax') {
-		$tabs = explode('|', preg_replace('[^a-z]', '', $_GET['tab']));
+		$tabs = explode('|', preg_replace('/[^a-z|]/i', '', (string)($_GET['tab'] ?? '')));
 		unset($_GET['type']);
 
 		foreach ($tabs as $tab) {
-			if (file_exists(PAGE_PATH . '/claninfo_' . $tab . '.php')) {
+			if ($tab !== '' && file_exists(PAGE_PATH . '/claninfo_' . $tab . '.php')) {
 				@include(PAGE_PATH . '/claninfo_' . $tab . '.php');
 			}
 		}

@@ -42,7 +42,12 @@ For support and installation notes visit http://www.hlxcommunity.com
 	
 	// Roles Details
 	
-	$role = valid_request($_GET['role'], false) or error('No role ID specified.');
+	$role = valid_request($_GET['role'] ?? '', false);
+	if (!$role) {
+		error('No role ID specified.');
+	}
+	$role_escaped = $db->escape($role);
+	$game_escaped = $db->escape($game);
 	
 	$db->query("
 		SELECT
@@ -51,8 +56,8 @@ For support and installation notes visit http://www.hlxcommunity.com
 		FROM
 			hlstats_Roles
 		WHERE
-			hlstats_Roles.code='$role'
-			AND hlstats_Roles.game='$game'
+			hlstats_Roles.code='$role_escaped'
+			AND hlstats_Roles.game='$game_escaped'
 	");
 	
 	if ($db->num_rows() != 1) {
@@ -65,7 +70,7 @@ For support and installation notes visit http://www.hlxcommunity.com
 		$role_code = $roledata['code'];
 	}
 
-	$db->query("SELECT name FROM hlstats_Games WHERE code='$game'");
+	$db->query("SELECT name FROM hlstats_Games WHERE code='$game_escaped'");
 	if ($db->num_rows() != 1) {
 		error('Invalid or no game specified.');
 	} else {
@@ -113,8 +118,8 @@ For support and installation notes visit http://www.hlxcommunity.com
 			hlstats_Players
 		WHERE
 			hlstats_Players.playerId = hlstats_Events_Frags.killerId
-			AND hlstats_Events_Frags.killerRole='$role'
-			AND hlstats_Players.game='$game'
+			AND hlstats_Events_Frags.killerRole='$role_escaped'
+			AND hlstats_Players.game='$game_escaped'
 			AND hlstats_Players.hideranking<>'1'
 		GROUP BY
 			hlstats_Events_Frags.killerId
@@ -127,15 +132,15 @@ For support and installation notes visit http://www.hlxcommunity.com
 	$resultCount = $db->query("
 		SELECT
 			COUNT(DISTINCT hlstats_Events_Frags.killerId),
-			SUM(hlstats_Events_Frags.killerRole='$role'),
-			SUM(hlstats_Events_Frags.killerRole='$role' AND hlstats_Events_Frags.headshot=1)
+			SUM(hlstats_Events_Frags.killerRole='$role_escaped'),
+			SUM(hlstats_Events_Frags.killerRole='$role_escaped' AND hlstats_Events_Frags.headshot=1)
 		FROM
 			hlstats_Events_Frags,
 			hlstats_Servers
 		WHERE
 			hlstats_Servers.serverId = hlstats_Events_Frags.serverId
-			AND hlstats_Events_Frags.killerRole='$role'
-			AND hlstats_Servers.game='$game'
+			AND hlstats_Events_Frags.killerRole='$role_escaped'
+			AND hlstats_Servers.game='$game_escaped'
 	");
 	
 	list($numitems, $totalkills, $totalheadshots) = $db->fetch_row($resultCount);

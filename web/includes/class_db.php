@@ -74,6 +74,8 @@ class DB_mysql
 
 	function __construct($db_addr, $db_user, $db_pass, $db_name, $use_pconnect = false)
 	{
+		mysqli_report(MYSQLI_REPORT_OFF);
+
 		$this->db_addr = $db_addr;
 		$this->db_user = $db_user;
 		$this->db_pass = $db_pass;
@@ -82,7 +84,7 @@ class DB_mysql
 
 		if ( $use_pconnect )
 		{
-			$this->link = @mysqli_pconnect($db_addr, $db_user, $db_pass);
+			$this->link = @mysqli_connect('p:' . $db_addr, $db_user, $db_pass);
 		}
 		else
 		{
@@ -117,7 +119,7 @@ class DB_mysql
 	{
 		if ( !$query_id )
 		{
-			$result = $this->last_result;
+			$query_id = $this->last_result;
 		}
 		if ( $query_id )
 		{
@@ -265,41 +267,48 @@ class DB_mysql
 		}
 	}
 
-	function result($row, $field, $query_id = 0)
+	function result($row, $field = 0, $query_id = 0)
 	{
 		if ( !$query_id )
 		{
 			$query_id = $this->last_result;
 		}
 
-		if ( $query_id )
+		if ( $query_id && @mysqli_data_seek($query_id, $row) )
 		{
-			return @mysqli_result($query_id, $row, $field);
+			$row_data = @mysqli_fetch_array($query_id);
+			return $row_data[$field] ?? false;
 		}
 		return false;
 	}
 
 	function escape($string)
 	{
+		$string = (string)($string ?? '');
 		if ( $this->link )
 		{
 			return @mysqli_real_escape_string($this->link, $string);
 		}
 	
-		return $string;	
+		return addslashes($string);	
 	}
 
 	function error($message, $exit=true)
 	{
-		error(
-			"<b>Database Error</b><br />\n<br />\n" .
-			"<i>Server Address:</i> $this->db_addr<br />\n" .
-			"<i>Server Username:</i> $this->db_user<br /><br />\n" .
-			"<i>Error Diagnostic:</i><br />\n$message<br /><br />\n" .
-			"<i>Server Error:</i> (" . @mysqli_errno($this->link) . ") " . @mysqli_error($this->link) . "<br /><br />\n" .
-			"<i>Last SQL Query:</i><br />\n<pre style=\"font-size:2px;\">$this->last_query</pre>",
-			$exit
-		);
+		if ( defined('DB_DEBUG') && DB_DEBUG == true )
+		{
+			error(
+				"Database Error: $message (" . @mysqli_errno($this->link) . ") " . @mysqli_error($this->link) . " | Query: $this->last_query",
+				$exit
+			);
+		}
+		else
+		{
+			error(
+				"Database Error: $message",
+				$exit
+			);
+		}
 	}
 }
 ?>

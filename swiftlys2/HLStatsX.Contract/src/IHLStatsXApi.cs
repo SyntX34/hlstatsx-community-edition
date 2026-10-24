@@ -61,4 +61,11 @@ public interface IHLStatsXApi
     /// Shows a top-left HUD message on screen.
     /// </summary>
     void ShowTopLeftHud(IPlayer? target, string message, float duration = 4f);
+
+    /// <summary>
+    /// Credits a kill to the attacker for streak tracking (Double Kill, Triple Kill, etc.).
+    /// Call this from zombie/custom mods when infection kills don't fire standard player_death.
+    /// Optionally resets the victim's streak if provided.
+    /// </summary>
+    void AddPlayerKillCredit(IPlayer attacker, IPlayer? victim = null);
 }

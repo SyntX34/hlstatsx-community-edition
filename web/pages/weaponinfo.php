@@ -41,7 +41,12 @@ For support and installation notes visit http://www.hlxcommunity.com
     }
 	// Weapon Details
 	
-	$weapon = valid_request($_GET['weapon'], false) or error('No weapon ID specified.');
+	$weapon = valid_request($_GET['weapon'] ?? '', false);
+	if (!$weapon) {
+		error('No weapon ID specified.');
+	}
+	$weapon_escaped = $db->escape($weapon);
+	$game_escaped = $db->escape($game);
 	
 	$db->query("
 		SELECT
@@ -49,8 +54,8 @@ For support and installation notes visit http://www.hlxcommunity.com
 		FROM
 			hlstats_Weapons
 		WHERE
-			code='$weapon'
-			AND game='$game'
+			code='$weapon_escaped'
+			AND game='$game_escaped'
 	");
 	
 	if ($db->num_rows() != 1)
@@ -64,7 +69,7 @@ For support and installation notes visit http://www.hlxcommunity.com
 		$wep_name = $weapondata['name'];
 	}
 	
-	$db->query("SELECT name FROM hlstats_Games WHERE code='$game'");
+	$db->query("SELECT name FROM hlstats_Games WHERE code='$game_escaped'");
 	if ($db->num_rows() != 1)
 	{
 		error('Invalid or no game specified.');
@@ -127,8 +132,8 @@ For support and installation notes visit http://www.hlxcommunity.com
 			hlstats_Players
 		WHERE
 			hlstats_Players.playerId = hlstats_Events_Frags.killerId
-			AND hlstats_Events_Frags.weapon='$weapon'
-			AND hlstats_Players.game='$game'
+			AND hlstats_Events_Frags.weapon='$weapon_escaped'
+			AND hlstats_Players.game='$game_escaped'
 			AND hlstats_Players.hideranking = 0
 		GROUP BY
 			hlstats_Events_Frags.killerId
@@ -141,15 +146,15 @@ For support and installation notes visit http://www.hlxcommunity.com
 	$resultCount = $db->query("
 		SELECT
 			COUNT(DISTINCT hlstats_Events_Frags.killerId),
-			SUM(hlstats_Events_Frags.weapon='$weapon'),
-			SUM(hlstats_Events_Frags.weapon='$weapon' AND hlstats_Events_Frags.headshot=1)
+			SUM(hlstats_Events_Frags.weapon='$weapon_escaped'),
+			SUM(hlstats_Events_Frags.weapon='$weapon_escaped' AND hlstats_Events_Frags.headshot=1)
 		FROM
 			hlstats_Events_Frags,
 			hlstats_Servers
 		WHERE
 			hlstats_Servers.serverId = hlstats_Events_Frags.serverId
-			AND hlstats_Events_Frags.weapon='$weapon'
-			AND hlstats_Servers.game='$game'
+			AND hlstats_Events_Frags.weapon='$weapon_escaped'
+			AND hlstats_Servers.game='$game_escaped'
 	");
 	
 	list($numitems, $totalkills, $totalheadshots) = $db->fetch_row($resultCount);

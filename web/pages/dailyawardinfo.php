@@ -41,7 +41,10 @@ For support and installation notes visit http://www.hlxcommunity.com
     }
 
 	// Daily Award Statistics
-	$award = valid_request($_GET['award'], true) or error('No award ID specified.');
+	$award = valid_request($_GET['award'] ?? 0, true);
+	if ($award <= 0) {
+		error('No award ID specified.');
+	}
 
 	$db->query("
 		SELECT
