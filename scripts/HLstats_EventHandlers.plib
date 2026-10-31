@@ -2091,7 +2091,7 @@ sub doEvent_Chat
 				($cmd =~ /^\/?session$/i) || ($cmd =~ /^\/?session_data$/i) ||
 				($cmd =~ /^\/?top\d{1,2}?$/i) ||
 				($cmd =~ /^\/?statsme$/i) ||
-				($cmd =~ /^\/?next$/i) ||
+				($cmd =~ /^\/?(next|nextrank|nextplayers|hlx_next)$/i) ||
 				($cmd =~ /^\/?knife$/i) || ($cmd =~ /^\/?usp$/i)       || ($cmd =~ /^\/?glock$/i)     || ($cmd =~ /^\/?deagle$/i)  || 
 				($cmd =~ /^\/?p228$/i)  || ($cmd =~ /^\/?m3$/i)        || ($cmd =~ /^\/?xm1014$/i)    || ($cmd =~ /^\/?mp5navy$/i)     ||
 				($cmd =~ /^\/?tmp$/i)   || ($cmd =~ /^\/?p90$/i)       || ($cmd =~ /^\/?m4a1$/i)      || ($cmd =~ /^\/?ak47$/i)    ||
@@ -2236,7 +2236,7 @@ sub doEvent_Chat
 					($cmd =~ /^\/?session$/i) || ($cmd =~ /^\/?session_data$/i) ||
 					($cmd =~ /^\/?top\d{1,2}?$/i) ||
 					($cmd =~ /^\/?statsme$/i) ||
-					($cmd =~ /^\/?next$/i) ||
+					($cmd =~ /^\/?(next|nextrank|nextplayers|hlx_next)$/i) ||
 					($cmd =~ /^\/?knife$/i) || ($cmd =~ /^\/?usp$/i)       || ($cmd =~ /^\/?glock$/i)     || ($cmd =~ /^\/?deagle$/i)  || 
 					($cmd =~ /^\/?p228$/i)  || ($cmd =~ /^\/?m3$/i)        || ($cmd =~ /^\/?xm1014$/i)    || ($cmd =~ /^\/?mp5navy$/i)     ||
 					($cmd =~ /^\/?tmp$/i)   || ($cmd =~ /^\/?p90$/i)       || ($cmd =~ /^\/?m4a1$/i)      || ($cmd =~ /^\/?ak47$/i)    ||
@@ -2916,7 +2916,7 @@ sub doEvent_Chat
 		}
 
 		### Begin of next Addon
-		elsif ($message =~ /^\/?next([ ][0-9]+)?$/i) {
+		elsif ($message =~ /^\/?(next|nextrank|nextplayers|hlx_next)([ ][0-9]+)?$/i) {
 			my $playerName = $player->{name};
 			my ($ranknumber, $totalplayers, $osd_message) = get_next_ranks($player);
 			if ($g_servers{$s_addr}->{player_command_osd} ne "") {

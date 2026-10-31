@@ -219,6 +219,56 @@ public partial class HLStatsX : BasePlugin
             try { Core.Command.UnhookClientChat(_chatHookGuid); } catch { }
             _chatHookGuid = Guid.Empty;
         }
+        if (_clientCmdHookGuid != Guid.Empty)
+        {
+            try { Core.Command.UnhookClientCommand(_clientCmdHookGuid); } catch { }
+            _clientCmdHookGuid = Guid.Empty;
+        }
+
+        _clientCmdHookGuid = Core.Command.HookClientCommand((playerId, commandLine) =>
+        {
+            if (string.IsNullOrWhiteSpace(commandLine)) return HookResult.Continue;
+            string trimmed = commandLine.Trim();
+
+            if (trimmed.Equals("next", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.Equals("sw_next", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.Equals("nextrank", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.Equals("sw_nextrank", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.Equals("nextplayers", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.Equals("sw_nextplayers", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.Equals("hlx_next", StringComparison.OrdinalIgnoreCase))
+            {
+                var p = Core.PlayerManager.GetPlayer(playerId);
+                if (p != null && p.IsValid)
+                    DispatchPlayerStatCommand(p, "next", "say");
+                return HookResult.Continue;
+            }
+
+            if (trimmed.StartsWith("say ", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("say_team ", StringComparison.OrdinalIgnoreCase))
+            {
+                int spaceIdx = trimmed.IndexOf(' ');
+                if (spaceIdx > 0)
+                {
+                    string verb = trimmed.Substring(0, spaceIdx).ToLowerInvariant();
+                    string arg = trimmed.Substring(spaceIdx + 1).Trim().Trim('"').Trim();
+                    if (arg.StartsWith('!') || arg.StartsWith('/'))
+                        arg = arg.Substring(1).Trim();
+
+                    if (arg.Equals("next", StringComparison.OrdinalIgnoreCase) ||
+                        arg.Equals("nextrank", StringComparison.OrdinalIgnoreCase) ||
+                        arg.Equals("nextplayers", StringComparison.OrdinalIgnoreCase) ||
+                        arg.Equals("hlx_next", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var p = Core.PlayerManager.GetPlayer(playerId);
+                        if (p != null && p.IsValid)
+                            DispatchPlayerStatCommand(p, "next", verb);
+                    }
+                }
+            }
+
+            return HookResult.Continue;
+        });
 
         _chatHookGuid = Core.Command.HookClientChat((playerId, text, teamOnly) =>
         {
@@ -730,6 +780,11 @@ public partial class HLStatsX : BasePlugin
             try { Core.Command.UnhookClientChat(_chatHookGuid); } catch { }
             _chatHookGuid = Guid.Empty;
         }
+        if (_clientCmdHookGuid != Guid.Empty)
+        {
+            try { Core.Command.UnhookClientCommand(_clientCmdHookGuid); } catch { }
+            _clientCmdHookGuid = Guid.Empty;
+        }
         Core.Event.OnMapLoad -= HandleMapLoad;
         Core.Event.OnMapUnload -= HandleMapUnload;
         Core.Event.OnCustomHudClicked -= HandleCustomHudClick;
@@ -753,6 +808,13 @@ public partial class HLStatsX : BasePlugin
         int playerId = player.PlayerID;
         long now = Environment.TickCount64;
         string normalized = commandText.Trim();
+
+        if (normalized.Equals("nextrank", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("nextplayers", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("hlx_next", StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = "next";
+        }
 
         if (_lastPlayerCommand.TryGetValue(playerId, out var prev) &&
             prev.Command.Equals(normalized, StringComparison.OrdinalIgnoreCase) &&

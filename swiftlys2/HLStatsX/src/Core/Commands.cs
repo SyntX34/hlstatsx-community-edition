@@ -12,7 +12,7 @@ public partial class HLStatsX : BasePlugin
     private static readonly HashSet<string> BlockedCommands = new(StringComparer.OrdinalIgnoreCase)
     {
         "rank", "skill", "points", "place", "session", "session_data",
-        "kpd", "kdratio", "kdeath", "next", "load", "status", "servers",
+        "kpd", "kdratio", "kdeath", "next", "nextrank", "nextplayers", "hlx_next", "load", "status", "servers",
         "top", "top20", "top15", "top12", "top10", "top5", "clans", "bans", "cheaters", "statsme",
         "weapons", "weapon", "weapon_usage", "action", "actions", "accuracy", "targets",
         "target", "kills", "kill", "player_kills", "map", "maps", "map_stats",
@@ -198,14 +198,19 @@ public partial class HLStatsX : BasePlugin
                 _hlxceVersion = string.Join(" ", context.Args).Trim('"', '\'');
         }, registerRaw: true);
 
-        void RegisterPlayerStatsCommand(string name)
+        void RegisterPlayerStatsCommand(string name, string? daemonCommand = null)
         {
-            Core.Command.RegisterCommand(name, (context) =>
+            string targetCmd = daemonCommand ?? name;
+            try
             {
-                if (!context.IsSentByPlayer || context.Sender is not { } player || !player.IsValid) return;
-                string arg = context.Args.Length > 0 ? " " + string.Join(" ", context.Args) : "";
-                DispatchPlayerStatCommand(player, $"{name}{arg}", "say");
-            }, registerRaw: true);
+                Core.Command.RegisterCommand(name, (context) =>
+                {
+                    if (!context.IsSentByPlayer || context.Sender is not { } player || !player.IsValid) return;
+                    string arg = context.Args.Length > 0 ? " " + string.Join(" ", context.Args) : "";
+                    DispatchPlayerStatCommand(player, $"{targetCmd}{arg}", "say");
+                }, registerRaw: true);
+            }
+            catch { }
         }
 
         RegisterPlayerStatsCommand("rank");
@@ -221,7 +226,10 @@ public partial class HLStatsX : BasePlugin
         RegisterPlayerStatsCommand("statsme");
         RegisterPlayerStatsCommand("session");
         RegisterPlayerStatsCommand("session_data");
-        RegisterPlayerStatsCommand("next");
+        RegisterPlayerStatsCommand("next", "next");
+        RegisterPlayerStatsCommand("nextrank", "next");
+        RegisterPlayerStatsCommand("nextplayers", "next");
+        RegisterPlayerStatsCommand("hlx_next", "next");
         RegisterPlayerStatsCommand("kpd");
         RegisterPlayerStatsCommand("kdratio");
         RegisterPlayerStatsCommand("kdeath");
