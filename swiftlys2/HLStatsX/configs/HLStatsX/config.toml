@@ -9,7 +9,7 @@ DaemonHost = "127.0.0.1"
 DaemonPort = 27500
 
 # Public IP of this CS2 server (as configured in HLstatsX Web Admin -> Servers)
-ServerIp = "127.0.0.1"
+ServerIp = ""
 
 # Game port of this CS2 server (as configured in HLstatsX Web Admin -> Servers)
 ServerPort = 27015

@@ -2145,6 +2145,27 @@ while ($loop = &getLine()) {
 
 		# Get the server info, if we know the server, otherwise ignore the data
 		if (!defined($g_servers{$s_addr})) {
+			if (!defined($g_config_servers{$s_addr})) {
+				my @cfg_addrs = keys(%g_config_servers);
+				if (scalar(@cfg_addrs) == 1 && ($s_peerhost eq "127.0.0.1" || $s_peerhost eq "::1" || $cfg_addrs[0] =~ /^\Q$s_peerhost\E:/)) {
+					$s_addr = $cfg_addrs[0];
+					($s_peerhost, $s_peerport) = split(/:/, $s_addr);
+				} elsif ($s_peerhost eq "127.0.0.1" || $s_peerhost eq "::1") {
+					foreach my $caddr (@cfg_addrs) {
+						if ($caddr =~ /:(\d+)$/ && $1 == $s_peerport) {
+							$s_addr = $caddr;
+							($s_peerhost, $s_peerport) = split(/:/, $s_addr);
+							last;
+						}
+					}
+				} else {
+					my @ip_matches = grep(/^\Q$s_peerhost\E:/, @cfg_addrs);
+					if (scalar(@ip_matches) == 1) {
+						$s_addr = $ip_matches[0];
+						($s_peerhost, $s_peerport) = split(/:/, $s_addr);
+					}
+				}
+			}
 			if (($g_onlyconfig_servers == 1) && (!defined($g_config_servers{$s_addr}))) {
 				# HELLRAISER disabled this for testing
 				&printEvent(997, "NOT ALLOWED SERVER: " . $s_output);
