@@ -219,56 +219,6 @@ public partial class HLStatsX : BasePlugin
             try { Core.Command.UnhookClientChat(_chatHookGuid); } catch { }
             _chatHookGuid = Guid.Empty;
         }
-        if (_clientCmdHookGuid != Guid.Empty)
-        {
-            try { Core.Command.UnhookClientCommand(_clientCmdHookGuid); } catch { }
-            _clientCmdHookGuid = Guid.Empty;
-        }
-
-        _clientCmdHookGuid = Core.Command.HookClientCommand((playerId, commandLine) =>
-        {
-            if (string.IsNullOrWhiteSpace(commandLine)) return HookResult.Continue;
-            string trimmed = commandLine.Trim();
-
-            if (trimmed.Equals("next", StringComparison.OrdinalIgnoreCase) ||
-                trimmed.Equals("sw_next", StringComparison.OrdinalIgnoreCase) ||
-                trimmed.Equals("nextrank", StringComparison.OrdinalIgnoreCase) ||
-                trimmed.Equals("sw_nextrank", StringComparison.OrdinalIgnoreCase) ||
-                trimmed.Equals("nextplayers", StringComparison.OrdinalIgnoreCase) ||
-                trimmed.Equals("sw_nextplayers", StringComparison.OrdinalIgnoreCase) ||
-                trimmed.Equals("hlx_next", StringComparison.OrdinalIgnoreCase))
-            {
-                var p = Core.PlayerManager.GetPlayer(playerId);
-                if (p != null && p.IsValid)
-                    DispatchPlayerStatCommand(p, "next", "say");
-                return HookResult.Continue;
-            }
-
-            if (trimmed.StartsWith("say ", StringComparison.OrdinalIgnoreCase) ||
-                trimmed.StartsWith("say_team ", StringComparison.OrdinalIgnoreCase))
-            {
-                int spaceIdx = trimmed.IndexOf(' ');
-                if (spaceIdx > 0)
-                {
-                    string verb = trimmed.Substring(0, spaceIdx).ToLowerInvariant();
-                    string arg = trimmed.Substring(spaceIdx + 1).Trim().Trim('"').Trim();
-                    if (arg.StartsWith('!') || arg.StartsWith('/'))
-                        arg = arg.Substring(1).Trim();
-
-                    if (arg.Equals("next", StringComparison.OrdinalIgnoreCase) ||
-                        arg.Equals("nextrank", StringComparison.OrdinalIgnoreCase) ||
-                        arg.Equals("nextplayers", StringComparison.OrdinalIgnoreCase) ||
-                        arg.Equals("hlx_next", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var p = Core.PlayerManager.GetPlayer(playerId);
-                        if (p != null && p.IsValid)
-                            DispatchPlayerStatCommand(p, "next", verb);
-                    }
-                }
-            }
-
-            return HookResult.Continue;
-        });
 
         _chatHookGuid = Core.Command.HookClientChat((playerId, text, teamOnly) =>
         {
@@ -780,11 +730,6 @@ public partial class HLStatsX : BasePlugin
             try { Core.Command.UnhookClientChat(_chatHookGuid); } catch { }
             _chatHookGuid = Guid.Empty;
         }
-        if (_clientCmdHookGuid != Guid.Empty)
-        {
-            try { Core.Command.UnhookClientCommand(_clientCmdHookGuid); } catch { }
-            _clientCmdHookGuid = Guid.Empty;
-        }
         Core.Event.OnMapLoad -= HandleMapLoad;
         Core.Event.OnMapUnload -= HandleMapUnload;
         Core.Event.OnCustomHudClicked -= HandleCustomHudClick;
@@ -824,7 +769,198 @@ public partial class HLStatsX : BasePlugin
         }
 
         _lastPlayerCommand[playerId] = (normalized, now);
+
+        if (normalized.Equals("next", StringComparison.OrdinalIgnoreCase))
+        {
+            RequestNextPlayersWithFallback(player, verb);
+            return;
+        }
+
         SendLog(player, normalized, verb);
+    }
+
+    private void CancelNextFallback(int playerId)
+    {
+        if (_pendingNextFallback.Remove(playerId, out var pending))
+        {
+            try { pending.Timer.Cancel(); } catch { }
+        }
+    }
+
+    private void RequestNextPlayersWithFallback(IPlayer player, string verb = "say")
+    {
+        if (player == null || !player.IsValid) return;
+        int playerId = player.PlayerID;
+
+        CancelNextFallback(playerId);
+        SendLog(player, "/next", verb);
+        SendLog(player, "next", verb);
+
+        var cts = Core.Scheduler.DelayBySeconds(0.25f, () =>
+        {
+            if (!_pendingNextFallback.ContainsKey(playerId)) return;
+            if (player == null || !player.IsValid)
+            {
+                CancelNextFallback(playerId);
+                return;
+            }
+
+            /* Daemon did not reply to "next" (legacy get_next_ranks SQL issue on daemon); synthesize from rank + top20 */
+            SendLog(player, "rank", "say");
+            SendLog(player, "top20", "say");
+
+            Core.Scheduler.DelayBySeconds(0.6f, () =>
+            {
+                if (_pendingNextFallback.TryGetValue(playerId, out var state))
+                {
+                    CancelNextFallback(playerId);
+                    if (player != null && player.IsValid && (state.RankMenu != null || state.TopMenu != null))
+                    {
+                        string menu = BuildSynthesizedNextMenu(player.Name ?? "Player", state.Rank, state.Points, state.TopMenu);
+                        DisplayDaemonStatsMenu(player, menu, 15);
+                    }
+                }
+            });
+        });
+
+        _pendingNextFallback[playerId] = (cts, 0, 0, null, null);
+    }
+
+    private bool TryHandleNextFallbackMsay(IPlayer player, string message, int duration)
+    {
+        int playerId = player.PlayerID;
+        if (!_pendingNextFallback.TryGetValue(playerId, out var state))
+            return false;
+
+        if (message.Contains("Next Players", StringComparison.OrdinalIgnoreCase))
+        {
+            CancelNextFallback(playerId);
+            return false;
+        }
+
+        if (message.Contains("->1 - Total", StringComparison.OrdinalIgnoreCase) && message.Contains("Position ", StringComparison.OrdinalIgnoreCase))
+        {
+            int rank = state.Rank;
+            int points = state.Points;
+
+            foreach (var rawLine in message.Split('\n'))
+            {
+                var line = rawLine.Trim();
+                if (line.StartsWith("Position ", StringComparison.OrdinalIgnoreCase))
+                {
+                    var parts = line.Substring(9).Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length > 0)
+                        int.TryParse(parts[0].Replace(",", ""), out rank);
+                }
+                else if (line.EndsWith(" Points", StringComparison.OrdinalIgnoreCase) && !line.StartsWith("-", StringComparison.Ordinal))
+                {
+                    var numPart = line.Substring(0, line.Length - 7).Trim().Replace(",", "");
+                    if (int.TryParse(numPart, out int parsedPts))
+                        points = parsedPts;
+                }
+            }
+
+            state = (state.Timer, rank, points, message, state.TopMenu);
+            _pendingNextFallback[playerId] = state;
+
+            if (state.TopMenu != null)
+            {
+                CancelNextFallback(playerId);
+                string synthesized = BuildSynthesizedNextMenu(player.Name ?? "Player", state.Rank, state.Points, state.TopMenu);
+                DisplayDaemonStatsMenu(player, synthesized, duration);
+            }
+            return true;
+        }
+
+        if (message.Contains("Top 20 Players", StringComparison.OrdinalIgnoreCase) || message.Contains("Top 10 Players", StringComparison.OrdinalIgnoreCase))
+        {
+            state = (state.Timer, state.Rank, state.Points, state.RankMenu, message);
+            _pendingNextFallback[playerId] = state;
+
+            if (state.RankMenu != null)
+            {
+                CancelNextFallback(playerId);
+                string synthesized = BuildSynthesizedNextMenu(player.Name ?? "Player", state.Rank, state.Points, state.TopMenu);
+                DisplayDaemonStatsMenu(player, synthesized, duration);
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string BuildSynthesizedNextMenu(string callerName, int callerRank, int callerPoints, string? topMenu)
+    {
+        var entries = new List<(int Rank, int Points, string Name)>();
+
+        if (!string.IsNullOrEmpty(topMenu))
+        {
+            foreach (var rawLine in topMenu.Split('\n'))
+            {
+                var line = rawLine.Trim();
+                if (line.Length < 5 || !char.IsDigit(line[0]) || !char.IsDigit(line[1])) continue;
+
+                var tokens = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (tokens.Length < 4) continue;
+
+                if (!int.TryParse(tokens[0], out int r)) continue;
+                if (!int.TryParse(tokens[1].Replace(",", ""), out int pts)) continue;
+
+                string diffToken = tokens[2];
+                int nameStartIdx = line.IndexOf(diffToken, StringComparison.Ordinal);
+                string name = nameStartIdx >= 0 ? line.Substring(nameStartIdx + diffToken.Length).Trim() : tokens[tokens.Length - 1];
+                entries.Add((r, pts, name));
+            }
+        }
+
+        if (callerRank <= 0)
+        {
+            var selfMatch = entries.FirstOrDefault(e => e.Name.Equals(callerName, StringComparison.OrdinalIgnoreCase));
+            if (selfMatch.Rank > 0)
+            {
+                callerRank = selfMatch.Rank;
+                callerPoints = selfMatch.Points;
+            }
+            else
+            {
+                callerRank = 1;
+            }
+        }
+
+        string cleanCaller = callerName.Length > 20 ? callerName.Substring(0, 17) + "..." : callerName;
+        var sb = new System.Text.StringBuilder();
+        sb.Append("->1 - Next Players\n");
+        sb.Append($"   {callerRank:D2}  {callerPoints:N0}        -      {cleanCaller}\n");
+
+        var above = entries
+            .Where(e => (e.Rank < callerRank || e.Points > callerPoints) && !e.Name.Equals(callerName, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(e => e.Rank)
+            .ThenBy(e => e.Points)
+            .Take(10)
+            .ToList();
+
+        if (above.Count > 0)
+        {
+            foreach (var item in above)
+            {
+                int diff = Math.Max(0, item.Points - callerPoints);
+                sb.Append($"   {item.Rank:D2}  {item.Points:N0}  +{diff:D4}  {item.Name}\n");
+            }
+        }
+        else if (callerRank == 1)
+        {
+            sb.Append("   You are #1 - no players ranked above you!\n");
+        }
+        else if (entries.Count > 0)
+        {
+            foreach (var item in entries.OrderByDescending(e => e.Rank).Take(10))
+            {
+                int diff = Math.Max(0, item.Points - callerPoints);
+                sb.Append($"   {item.Rank:D2}  {item.Points:N0}  +{diff:D4}  {item.Name}\n");
+            }
+        }
+
+        return sb.ToString();
     }
 
     private string ResolveCurrentMapName(string? rawMap = null)
@@ -1708,25 +1844,25 @@ public partial class HLStatsX : BasePlugin
             switch (button)
             {
                 case "HlxMenuOption01":
-                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); SendLog(player, "rank", "say"); });
+                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); DispatchPlayerStatCommand(player, "rank", "say"); });
                     break;
                 case "HlxMenuOption02":
-                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); SendLog(player, "top10", "say"); });
+                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); DispatchPlayerStatCommand(player, "top10", "say"); });
                     break;
                 case "HlxMenuOption03":
-                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); SendLog(player, "top20", "say"); });
+                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); DispatchPlayerStatCommand(player, "top20", "say"); });
                     break;
                 case "HlxMenuOption04":
-                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); SendLog(player, "next", "say"); });
+                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); DispatchPlayerStatCommand(player, "next", "say"); });
                     break;
                 case "HlxMenuOption05":
-                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); SendLog(player, "session", "say"); });
+                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); DispatchPlayerStatCommand(player, "session", "say"); });
                     break;
                 case "HlxMenuOption06":
-                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); SendLog(player, "statsme", "say"); });
+                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); DispatchPlayerStatCommand(player, "statsme", "say"); });
                     break;
                 case "HlxMenuOption07":
-                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); SendLog(player, "weapons", "say"); });
+                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); DispatchPlayerStatCommand(player, "weapons", "say"); });
                     break;
                 case "HlxMenuExit":
                     Core.Scheduler.NextTick(() => CloseCustomHud(playerId));
@@ -1769,7 +1905,7 @@ public partial class HLStatsX : BasePlugin
                     Core.Scheduler.NextTick(() =>
                     {
                         CancelMenuAutoClose(p.PlayerID);
-                        SendLog(p, cmd, "say");
+                        DispatchPlayerStatCommand(p, cmd, "say");
                     });
                 }
                 return ValueTask.CompletedTask;

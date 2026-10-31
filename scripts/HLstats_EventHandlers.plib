@@ -2918,7 +2918,44 @@ sub doEvent_Chat
 		### Begin of next Addon
 		elsif ($message =~ /^\/?(next|nextrank|nextplayers|hlx_next)([ ][0-9]+)?$/i) {
 			my $playerName = $player->{name};
-			my ($ranknumber, $totalplayers, $osd_message) = get_next_ranks($player);
+			my ($base, $ranknumber, $totalplayers) = get_player_rank($player);
+			my $rankcol  = ($g_ranktype eq "kills") ? "kills" : "skill";
+			my $rankword = ($g_ranktype eq "kills") ? " kills" : "";
+			if (!defined($base) || $base eq "") {
+				$base = ($rankcol eq "kills") ? ($player->{total_kills} || 0) : ($player->{skill} || 1000);
+			}
+			$ranknumber ||= 1;
+			my $osd_message = "->1 - Next Players\\n" . sprintf("   %02d  %s%s        -      %s", $ranknumber, &number_format($base), $rankword, $playerName) . "\\n";
+			my $result = &doQuery("
+				SELECT
+					$rankcol, lastName,
+					kills / IF(deaths=0,1,deaths) AS kpd
+				FROM
+					hlstats_Players
+				WHERE
+					game='".&quoteSQL($player->{game})."'
+					AND hideranking = 0
+					AND kills >= 1
+					AND $rankcol >= $base
+					AND playerId <> ".int($player->{playerid} || 0)."
+				ORDER BY
+					$rankcol ASC, kpd ASC
+				LIMIT 0, 10");
+			my $player_count = 0;
+			my $i = $ranknumber;
+			while (($player_count < 10) && (my ($p_base, $lastName) = $result->fetchrow_array)) {
+				$i--;
+				if ($i < 1) { $i = 1; }
+				if (length($lastName) > 20) {
+					$lastName = substr($lastName, 0, 17)."...";
+				}
+				$player_count++;
+				$osd_message .= sprintf("   %02d  %s%s  +%04d  %s", $i, &number_format($p_base), $rankword, ($p_base - $base), $lastName)."\\n";
+			}
+			$result->finish;
+			if ($player_count == 0) {
+				$osd_message .= "   You are #1 - no players ranked above you!\\n";
+			}
 			if ($g_servers{$s_addr}->{player_command_osd} ne "") {
 				$osd_string = $g_servers{$s_addr}->quoteparam($osd_message);
 				$cmd_str    = sprintf("%s \"15\" %s %s", $g_servers{$s_addr}->{"player_command_osd"}, $p_userid, $osd_string);

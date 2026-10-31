@@ -48,8 +48,8 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
     private string _hlxceVersion = "";
     private string _currentMapName = "";
     private Guid _chatHookGuid = Guid.Empty;
-    private Guid _clientCmdHookGuid = Guid.Empty;
     private readonly Dictionary<int, (string Command, long Tick)> _lastPlayerCommand = new();
+    private readonly Dictionary<int, (CancellationTokenSource Timer, int Rank, int Points, string? RankMenu, string? TopMenu)> _pendingNextFallback = new();
 
     private readonly HashSet<string> _interactingPlugins = new(StringComparer.OrdinalIgnoreCase);
 

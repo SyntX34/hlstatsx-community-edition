@@ -24,18 +24,6 @@ public partial class HLStatsX : BasePlugin
             if (_udpClient == null)
             {
                 _udpClient = new UdpClient();
-                try
-                {
-                    if (!string.IsNullOrWhiteSpace(_config.ServerIp) &&
-                        !_config.ServerIp.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) &&
-                        !_config.ServerIp.Equals("0.0.0.0", StringComparison.OrdinalIgnoreCase) &&
-                        System.Net.IPAddress.TryParse(_config.ServerIp, out var bindIp))
-                    {
-                        _udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-                        _udpClient.Client.Bind(new System.Net.IPEndPoint(bindIp, _config.ServerPort));
-                    }
-                }
-                catch { }
             }
         }
         catch (Exception ex)
@@ -192,6 +180,9 @@ public partial class HLStatsX : BasePlugin
         var player = FindPlayerTarget(target);
         if (player != null && player.IsValid && !player.IsFakeClient)
         {
+            if (TryHandleNextFallbackMsay(player, message, duration))
+                return;
+
             LogDebug($"Displaying stats menu for {player.Name} (UserID={player.UserID}, PlayerID={player.PlayerID}, Duration={duration}s)");
             DisplayDaemonStatsMenu(player, message, duration);
         }
@@ -354,26 +345,17 @@ public partial class HLStatsX : BasePlugin
         {
             if (_udpClient == null)
             {
-                EnsureUdpConnection();
+                _udpClient = new UdpClient();
             }
-            if (_udpClient == null) return;
             var now = DateTime.Now;
             var formatted = $"L {now:MM/dd/yyyy} - {now:HH:mm:ss}: {logLine}\n";
             if (!string.IsNullOrEmpty(_config.ProxyKey) && !string.IsNullOrEmpty(_config.ServerIp))
             {
                 formatted = $"PROXY Key={_config.ProxyKey} {_config.ServerIp}:{_config.ServerPort}PROXY {formatted}";
             }
-            string destHost = _config.DaemonHost;
-            if ((string.IsNullOrWhiteSpace(destHost) || destHost.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase)) &&
-                string.IsNullOrEmpty(_config.ProxyKey) &&
-                !string.IsNullOrWhiteSpace(_config.ServerIp) &&
-                !_config.ServerIp.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase))
-            {
-                destHost = _config.ServerIp;
-            }
-            LogDebug($"UDP TX to {destHost}:{_config.DaemonPort}: {logLine}");
+            LogDebug($"UDP TX to {_config.DaemonHost}:{_config.DaemonPort}: {logLine}");
             var data = Encoding.UTF8.GetBytes(formatted);
-            _udpClient.Send(data, data.Length, destHost, _config.DaemonPort);
+            _udpClient.Send(data, data.Length, _config.DaemonHost, _config.DaemonPort);
         }
         catch (Exception ex)
         {
