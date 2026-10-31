@@ -14,17 +14,20 @@ public partial class HLStatsX : BasePlugin
         "rank", "skill", "points", "place", "session", "session_data",
         "kpd", "kdratio", "kdeath", "next", "load", "status", "servers",
         "top", "top20", "top15", "top12", "top10", "top5", "clans", "bans", "cheaters", "statsme",
-        "weapons", "weapon", "action", "actions", "accuracy", "targets",
-        "target", "kills", "kill", "player_kills", "cmd", "cmds", "command",
+        "weapons", "weapon", "weapon_usage", "action", "actions", "accuracy", "targets",
+        "target", "kills", "kill", "player_kills", "map", "maps", "map_stats",
+        "cmd", "cmds", "command", "commands",
         "hlx_display 0", "hlx_display 1", "hlx_teams 0", "hlx_teams 1",
         "hlx_hideranking", "hlx_chat 0", "hlx_chat 1", "hlx_menu",
         "servers 1", "servers 2", "servers 3", "hlx", "hlstatsx", "help"
     };
 
-    private static bool IsStatCommand(string cmd)
+    private static bool IsStatCommand(string cmd, string fullCleaned)
     {
-        if (BlockedCommands.Contains(cmd)) return true;
+        if (BlockedCommands.Contains(fullCleaned) || BlockedCommands.Contains(cmd)) return true;
         if (cmd.StartsWith("top", StringComparison.OrdinalIgnoreCase)) return true;
+        if (cmd.StartsWith("hlx_", StringComparison.OrdinalIgnoreCase)) return true;
+        if (WeaponCode.ContainsKey(cmd)) return true;
         return false;
     }
 
@@ -224,14 +227,54 @@ public partial class HLStatsX : BasePlugin
         RegisterPlayerStatsCommand("kpd");
         RegisterPlayerStatsCommand("kdratio");
         RegisterPlayerStatsCommand("kdeath");
+        RegisterPlayerStatsCommand("weapon");
         RegisterPlayerStatsCommand("weapons");
+        RegisterPlayerStatsCommand("weapon_usage");
         RegisterPlayerStatsCommand("accuracy");
+        RegisterPlayerStatsCommand("target");
         RegisterPlayerStatsCommand("targets");
+        RegisterPlayerStatsCommand("kill");
         RegisterPlayerStatsCommand("kills");
+        RegisterPlayerStatsCommand("player_kills");
+        RegisterPlayerStatsCommand("action");
+        RegisterPlayerStatsCommand("actions");
+        RegisterPlayerStatsCommand("map");
+        RegisterPlayerStatsCommand("maps");
+        RegisterPlayerStatsCommand("map_stats");
+        RegisterPlayerStatsCommand("clans");
+        RegisterPlayerStatsCommand("cheaters");
+        RegisterPlayerStatsCommand("bans");
+        RegisterPlayerStatsCommand("status");
+        RegisterPlayerStatsCommand("load");
         RegisterPlayerStatsCommand("servers");
-        RegisterPlayerStatsCommand("hlx");
-        RegisterPlayerStatsCommand("hlstatsx");
-        RegisterPlayerStatsCommand("menu");
+        RegisterPlayerStatsCommand("help");
+        RegisterPlayerStatsCommand("cmd");
+        RegisterPlayerStatsCommand("cmds");
+        RegisterPlayerStatsCommand("commands");
+        RegisterPlayerStatsCommand("hlx_hideranking");
+        RegisterPlayerStatsCommand("hlx_display");
+        RegisterPlayerStatsCommand("hlx_chat");
+        RegisterPlayerStatsCommand("hlx_teams");
+        RegisterPlayerStatsCommand("hlx_set");
+        RegisterPlayerStatsCommand("hlx_auto");
+
+        void RegisterMenuCommand(string name)
+        {
+            Core.Command.RegisterCommand(name, (context) =>
+            {
+                if (!context.IsSentByPlayer || context.Sender is not { } player || !player.IsValid) return;
+                OpenStatsMenu(player);
+            }, registerRaw: true);
+            try { Core.Command.RegisterCommandAlias(name, $"!{name}"); } catch { }
+            try { Core.Command.RegisterCommandAlias(name, $"/{name}"); } catch { }
+        }
+
+        RegisterMenuCommand("hlx");
+        RegisterMenuCommand("hlstatsx");
+        RegisterMenuCommand("menu");
+        RegisterMenuCommand("hlxmenu");
+        RegisterMenuCommand("hlx_menu");
+        RegisterMenuCommand("statsmenu");
     }
 }
 

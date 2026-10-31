@@ -318,3 +318,30 @@ Use `tcpdump` on Linux to confirm packets are flowing in both directions (`-A` p
 | `(IGNORED) NOPLAYERINFO` in daemon logs | Player was already on the server before daemon started or after map change. | Fixed in HLStatsX SwiftlyS2 v1.2.0+: plugin automatically re-announces all connected players on map load, round start, and spawn. |
 | Backend shows `SWS2_TX ... hlx_sm_msay`, but no menu opens in-game | 1) `ReceiverPort` (`27016/udp`) blocked or not mapped to container.<br>2) `MenuType = "2"` (`CustomHud`) set without Metamod CustomHud installed. | 1) Open `27016/udp` and verify `ReceiverPort = 27016` in `config.toml`.<br>2) Set `MenuType = "1"` (`BuiltIn`) in `config.toml` unless Metamod CustomHud is installed and precached. |
 | CustomHud layout fails validation | Layout path had `file://{resources}/` or `resources/` prefix, or XML had `html="true"`. | Use `panorama/layout/custom_game/hlx_menu.xml` (automatically normalized in v1.2.0+). |
+
+---
+
+## 7. Complete In-Game Commands & Menu Navigation Reference
+
+See [swiftlys2/HLStatsX/README.md](swiftlys2/HLStatsX/README.md) for the full plugin reference, developer contract API (`HLStatsX.Contract.dll`), and command tables.
+
+### Menu Navigation (`Core.Menu` / `MenuType = "1"`)
+- **Navigate Up**: `Shift`
+- **Navigate Down**: `F`
+- **Select / Execute**: `E`
+- **Close Menu**: `Tab`
+*(Keybinds can be customized in `addons/swiftlys2/configs/menus/menus.jsonc`.)*
+
+### Player Chat & Console Commands (`!cmd`, `/cmd`, or `cmd`)
+- **Interactive Menu**: `!hlx`, `!menu`, `!hlstatsx`, `!hlxmenu`, `!hlx_menu`, `!statsmenu`
+- **Personal Rank & Progression**: `!rank`, `!skill`, `!points`, `!place` (broadcast), `!next`, `!session`, `!session_data` (broadcast), `!kpd`, `!kdratio`, `!kdeath` (broadcast), `!statsme`
+- **Leaderboards & Clans**: `!top`, `!top5`, `!top10`, `!top12`, `!top15`, `!top20`, `!clans`, `!bans`, `!cheaters`
+- **Weapons, Hitgroups, Victims, Actions & Maps**: `!weapons` (`!weapon`, `!weapon_usage`), `!accuracy`, `!targets` (`!target`), `!kills` (`!kill`, `!player_kills`), `!actions` (`!action`), `!maps` (`!map`, `!map_stats`), and per-weapon triggers (`!ak47`, `!awp`, `!m4a1_silencer`, `!deagle`, `!usp_silencer`, `!glock`, `!ssg08`, `!knife`, `!hegrenade`, etc.)
+- **Server Info & Help**: `!servers`, `!status`, `!load`, `!help`, `!cmd`, `!cmds`, `!commands`
+- **Preferences & Auto-Commands**: `!hlx_hideranking`, `!hlx_display 0|1`, `!hlx_chat 0|1`, `!hlx_auto start|end|kill <cmd>`, `!hlx_auto clear`, `!hlx_set realname|email|homepage <value>`, `!hlx_teams 0|1`
+
+---
+
+## 8. Updating an Existing HLstatsX Site with Local Customizations
+
+If you have local modifications on your HLstatsX web hosting (such as custom themes or frontend changes) and want to cherry-pick or inspect the exact PHP 8.2–8.5 security patch, CS2 support, and daemon changes, check commit [`007b223`](https://github.com/SyntX34/hlstatsx-community-edition/commit/007b223ee403c738a6b18baf9ee1f63013ba5a7e#diff-0e1a79d051518c85ddb92bcceb0a68de79281ba4654ad474a41902dee3910eb0).

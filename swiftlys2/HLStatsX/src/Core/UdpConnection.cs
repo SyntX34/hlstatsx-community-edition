@@ -365,12 +365,22 @@ public partial class HLStatsX : BasePlugin
     private void AnnouncePlayerOnMap(IPlayer player)
     {
         if (player == null || !player.IsValid) return;
-        SendPlayerConnectLogs(player);
+        if (!_mapConnectedPlayers.Contains(player.PlayerID))
+        {
+            SendPlayerConnectLogs(player);
+            _mapConnectedPlayers.Add(player.PlayerID);
+        }
         var team = GetTeamName(player);
-        if (team != "Unassigned")
+        if (team != "Unassigned" && team != "Spectator")
+        {
             SendLog(player, team, "joined team");
+            _mapAnnouncedPlayers.Add(player.PlayerID);
+        }
+        else if (team == "Spectator")
+        {
+            SendLog(player, team, "joined team");
+        }
         SendPlayerClanTag(player, force: true);
-        _mapAnnouncedPlayers.Add(player.PlayerID);
     }
 
     private void AnnounceAllConnectedPlayers()
@@ -412,8 +422,8 @@ public partial class HLStatsX : BasePlugin
         SendUdpLog($"\"{name}<{userid}><{steam3}><>\" connected, address \"{ip}\"");
         SendUdpLog($"\"{name}<{userid}><{steam3}><>\" STEAM USERID validated");
         SendUdpLog($"\"{name}<{userid}><{steam3}><>\" entered the game");
+        _mapConnectedPlayers.Add(player.PlayerID);
         SendPlayerClanTag(player, force: true);
-        _mapAnnouncedPlayers.Add(player.PlayerID);
     }
 
     private void SendServerCvars()

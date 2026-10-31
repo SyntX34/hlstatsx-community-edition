@@ -29,14 +29,17 @@ It features complete bi-directional UDP communication, player stat tracking, ran
 
 ## ✨ Features
 
-- **🎮 Full Stats Tracking**: Weapon kills, headshots, hits, accuracy, hitgroups (head, chest, stomach, arms, legs), suicides, team kills, bomb plants/defuses, hostage events, and MVPs.
-- **💬 Chat Command Interception**: Intercepts player commands (`rank`, `top10`, `top20`, `next`, `session`, `statsme`, `weapons`, etc.), forwards them silently to the daemon, and suppresses spam in public chat.
-- **📊 Panorama Custom HUD Menus**: Supports rich interactive Panorama HUD menus with key and mouse navigation for ranks, session stats, top 10, weapon breakdowns, and more.
-- **🖥️ CSAY & TSAY Panorama Displays**:
-  - `hlx_sm_csay`: Custom center HUD banner (e.g. *“Tracking X players with Y kills and Z headshots”*).
-  - `hlx_sm_tsay`: Custom top-left HUD stats panel.
+- **🎮 Full Stats Tracking**: Weapon kills, headshots, hits, accuracy, hitgroups (head, chest, stomach, arms, legs), suicides, team kills, bomb plants/defuses, hostage events, MVPs, and live CS2 `ClanTag` synchronization.
+- **💬 Chat Command Interception**: Intercepts all player commands (`!rank`, `!top10`, `!top20`, `!next`, `!session`, `!statsme`, `!weapons`, `!accuracy`, `!targets`, `!kills`, `!actions`, `!maps`, `!clans`, `!bans`, `!servers`, `!status`, `!load`, `!help`, weapon codes like `!ak47`, `!awp`, etc.), forwards them silently to the daemon, and suppresses spam in public chat.
+- **📊 Native Scrollable `Core.Menu` & Panorama Custom HUD Menus**:
+  - **BuiltIn (`MenuType = "1"`)**: Uses SwiftlyS2's native `Core.Menu` (`IMenuService`) with multi-page scrolling (`Shift` / `F` / `E` / `Tab`) and safe HTML escaping out of the box—no client downloads required.
+  - **CustomHud (`MenuType = "2"`)**: Supports rich interactive Panorama HUD menus (`hlx_menu.xml`, `hlx_csay.xml`, `hlx_tsay.xml`) when the Metamod CustomHud workshop addon is installed.
+- **🖥️ CSAY & TSAY Displays**:
+  - `hlx_sm_csay`: Center screen announcement (native CS2 center message when `MenuType = "1"`, or CustomHud banner when `MenuType = "2"`).
+  - `hlx_sm_tsay`: Top-left HUD / chat alert.
+- **🔄 Multi-Map Socket & Player State Continuity**: Automatically restarts the UDP client/listener and re-announces connected players across map changes (`HandleMapLoad`, `round_start`, and `player_spawn`) so tracking never drops on the second map.
 - **🔔 Connect & Event Announcements**: Automatically announces player connections with rank, points, and country geolocation.
-- **🌐 In-Game Webpage Support**: Opens player profile or stats website directly through client commands (`hlxce_webpage`).
+- **🌐 In-Game Webpage Support**: Prints player profile or stats website URLs directly in chat (`hlxce_webpage`) since CS2 removed the legacy Source 1 MOTD browser.
 - **🛡️ Address Protection**: Protects log forwarding addresses using `hlx_protect_address`.
 
 ---
@@ -108,6 +111,9 @@ Edit `csgo/addons/swiftlys2/configs/plugins/HLStatsX/config.toml` (or `csgo/addo
 
 ```toml
 [HLStatsX]
+# Enable verbose debug logging in server console (UDP TX/RX, menu dispatches, config load)
+Debug = false
+
 # IP/Hostname of the HLstatsX:CE perl daemon
 DaemonHost = "127.0.0.1"
 
@@ -120,7 +126,7 @@ ServerIp = "5.135.143.217"
 # Port of this game server
 ServerPort = 27015
 
-# Optional proxy key if you use hlstatsx proxy/relay
+# Proxy_Key from HLstatsX Web Admin -> Settings (leave empty only if not using Proxy_Key)
 ProxyKey = ""
 
 # Maximum players allowed on server (reported to daemon)
@@ -129,51 +135,121 @@ MaxPlayers = 32
 # UDP port on which the plugin listens for daemon commands (Default: ServerPort + 1)
 ReceiverPort = 27016
 
-# Menu display type: "CustomHud" (Panorama XML) or "BuiltIn" (Swiftly Menu API)
-MenuType = "CustomHud"
+# Menu display type:
+# "1" or "BuiltIn"   = SwiftlyS2 Built-In Center Menu (Core.Menu / IMenuService) - Recommended, works out of the box
+# "2" or "CustomHud" = Custom Panorama XML HUD (requires Metamod CustomHud + Workshop 3791366113)
+MenuType = "1"
 
-# Paths to custom Panorama layouts
-CustomMenuLayout = "resources/panorama/layout/custom_game/hlx_menu.xml"
-CustomCsayLayout = "resources/panorama/layout/custom_game/hlx_csay.xml"
-CustomTsayLayout = "resources/panorama/layout/custom_game/hlx_tsay.xml"
-
-# Automatically close custom HUD menus after X seconds (0 = disabled)
+# Automatically close menus after X seconds (0 = disabled)
 AutoCloseMenuSeconds = 15
+
+# Paths to custom Panorama layouts (used when MenuType = "2" / "CustomHud")
+CustomMenuLayout = "panorama/layout/custom_game/hlx_menu.xml"
+CustomCsayLayout = "panorama/layout/custom_game/hlx_csay.xml"
+CustomTsayLayout = "panorama/layout/custom_game/hlx_tsay.xml"
 ```
 
 ---
 
-## ⌨️ Player Chat & Console Commands
+## 🎮 Menu Navigation & Keybinds (`Core.Menu`)
 
-Players can type either with `!` or `/` (or directly in console):
+When using the built-in SwiftlyS2 menu system (`MenuType = "1"` / `"BuiltIn"`), multi-page menus such as `!hlx`, `!top10`, `!top20`, `!next`, `!statsme`, `!weapons`, `!accuracy`, `!targets`, `!kills`, `!actions`, and `!maps` are automatically paginated (5 items per page) and controlled using SwiftlyS2's default keys:
 
-| Chat Command | Description |
-| :--- | :--- |
-| `!rank` / `rank` | Displays total stats and current session stats |
-| `!top10` / `top10` | Displays top 10 ranked players on the server |
-| `!top20` / `top20` | Displays top 20 ranked players on the server |
-| `!next` / `next` | Shows players ranked directly above you |
-| `!session` / `session` | Shows kills, deaths, headshots, and points in your current session |
-| `!statsme` / `statsme` | Displays full personal weapon and hitgroup statistics |
-| `!weapons` / `weapons` | Displays detailed weapon kill and accuracy breakdown |
-| `!menu` / `!hlx` | Opens the interactive statistics menu |
-| `!servers` | Lists other servers connected to the HLstatsX network |
+| Action | Default Key | Config Key in `addons/swiftlys2/configs/menus/menus.jsonc` |
+| :--- | :--- | :--- |
+| **Navigate Up** | `Shift` | `Buttons.NavigateUp` |
+| **Navigate Down** | `F` | `Buttons.NavigateDown` |
+| **Select / Open** | `E` | `Buttons.Select` |
+| **Close Menu** | `Tab` | `Buttons.Close` |
 
 ---
 
-## 🔧 Daemon Commands (UDP HLX_CMD)
+## ⌨️ Complete In-Game Player & Admin Commands
 
-The plugin listens on `ReceiverPort` (`ServerPort + 1`) and executes:
+Players can type any command in public/team chat using `!command`, `/command`, or bare `command` (e.g., `!rank`, `/rank`, or `rank`), or run them directly in the client console:
+
+### 1. Interactive Main Menu
+| Command / Aliases | Description |
+| :--- | :--- |
+| `!hlx`, `!menu`, `!hlstatsx`, `!hlxmenu`, `!hlx_menu`, `!statsmenu` | Opens the interactive 17-item HLstatsX Main Menu (`Rank`, `Next Players`, `Top 10`, `Top 20`, `Session Stats`, `StatsMe`, `Weapon Usage`, `Weapon Accuracy`, `Hitgroup Targets`, `Player Kills`, `Action Summary`, `Map Stats`, `Clan Rankings`, `Server Status`, `Server List`, `Toggle Ranking Display`, `Help & Commands`). |
+
+### 2. Personal Rank, Session & Progression
+| Command / Aliases | Description |
+| :--- | :--- |
+| `!rank`, `!skill`, `!points` | Opens a 2-section OSD menu showing your **Total** stats (rank position, points, frags/K:D, headshots, favorite weapon, activity, online time) and **Session** stats. |
+| `!place` | Broadcasts your current rank position and skill points to **all players** in server chat. |
+| `!next` | Opens a scrollable OSD menu showing the **next 10 players ranked directly above you** and how many points you need to overtake each one. |
+| `!session` | Opens a personal OSD menu with your current map/session kills, deaths, K:D, headshots, point change,frags per minute, and rank change. |
+| `!session_data` | Broadcasts your current session summary to **all players** in server chat. |
+| `!kpd`, `!kdratio` | Opens your personal Total & Session kills/deaths/headshots breakdown menu. |
+| `!kdeath` | Broadcasts your K:D ratio and headshot stats to **all players** in server chat. |
+| `!statsme` | Opens a comprehensive personal stats OSD menu (Total + Session summary, favorite weapon kills/accuracy, and playtime). |
+
+### 3. Leaderboards, Clans & Server Lists
+| Command / Aliases | Description |
+| :--- | :--- |
+| `!top`, `!top5`, `!top10`, `!top12`, `!top15`, `!top20` | Opens a scrollable multi-page OSD menu listing the **Top N** players on the server (`Rank`, `Skill Points`, `Name`, and `K:D`). Bare `!top` defaults to Top 10. |
+| `!clans` | Opens a scrollable OSD menu showing top-ranked clans by average member skill points, member count, kills, and K:D. |
+| `!bans`, `!cheaters` | Opens a scrollable OSD menu listing banned/cheater accounts and their ban dates. |
+| `!servers` | Opens a scrollable OSD menu listing all participating game servers, current maps, and live player counts. |
+| `!status` | Opens a server status OSD menu showing the current server name, map, uptime, live players, and total server kills/headshots. |
+| `!load` | Opens a server load OSD menu showing current slots, active players, and minimum required trackable players. |
+| `!help`, `!cmd`, `!cmds`, `!commands` | Opens a scrollable in-game command reference menu. |
+
+### 4. Weapon, Accuracy, Hitgroup, Victim, Action & Map Menus
+| Command / Aliases | Description |
+| :--- | :--- |
+| `!weapons`, `!weapon`, `!weapon_usage` | Opens a scrollable menu of your top 10 weapons ranked by kills, % of total kills, headshots, and HS%. |
+| `!accuracy` | Opens a scrollable menu of your per-weapon shots fired, hits, accuracy %, and headshot %. |
+| `!targets`, `!target` | Opens a scrollable hitgroup breakdown menu (`Head`, `Chest`, `Stomach`, `Left Arm`, `Right Arm`, `Left Leg`, `Right Leg`) showing hits, hit %, and kills per body part. |
+| `!kills`, `!kill`, `!player_kills` | Opens a scrollable menu of your top 10 victims (players you have killed at least 5 times), including K:D and headshots against each. |
+| `!actions`, `!action` | Opens a scrollable menu of your completed objective/server actions (`Bomb Planted`, `Bomb Defused`, `Hostage Rescued`, `MVP`, etc.) and bonus points earned. |
+| `!maps`, `!map`, `!map_stats` | Opens a scrollable menu of your kills, deaths, K:D, and headshots broken down by map (`de_dust2`, `de_mirage`, etc.). |
+| `!<weapon_code>` | Type any CS2 weapon code (for example `!ak47`, `!awp`, `!m4a1`, `!m4a1_silencer`, `!deagle`, `!usp_silencer`, `!glock`, `!ssg08`, `!aug`, `!sg556`, `!famas`, `!galilar`, `!mp9`, `!mac10`, `!mp7`, `!ump45`, `!p90`, `!knife`, `!hegrenade`, `!inferno`, `!taser`) to open your personal stats for that specific weapon. |
+
+### 5. Player Preferences, Auto-Commands & Admin Controls
+| Command / Aliases | Description |
+| :--- | :--- |
+| `!hlx_hideranking` | Toggles whether your profile is hidden or visible on public leaderboards. |
+| `!hlx_display 0\|1` | Enables (`1`) or disables (`0`) personal console/OSD event notifications. |
+| `!hlx_chat 0\|1` | Enables (`1`) or disables (`0`) HLstatsX chat event messages for yourself. |
+| `!hlx_auto start\|end\|kill <command>` | Automatically runs a stats command (`rank`, `session`, `statsme`, `top10`, etc.) on round-start (`start`), round-end (`end`), or after a kill (`kill`). |
+| `!hlx_auto clear` | Clears your configured automatic command trigger. |
+| `!hlx_set realname\|email\|homepage <value>` | Updates your profile metadata shown on the HLstatsX web portal. |
+| `!hlx_teams 0\|1` | Enables or disables HLstatsX automatic team balancing. |
+
+---
+
+## 🔧 Daemon Commands (`UDP HLX_CMD` / Server Console)
+
+The plugin listens on `ReceiverPort` (`ServerPort + 1`) and also registers these commands in the server console:
 
 | Command | Usage | Description |
 | :--- | :--- | :--- |
-| `hlx_sm_msay` | `<time> <userid> [need_handler] <message>` | Displays multi-line stats breakdown in chat or HUD menu |
-| `hlx_sm_psay` | `<userid> <color> <message>` | Sends formatted private or broadcast chat message |
-| `hlx_sm_csay` | `<message>` | Displays center screen HUD announcement |
-| `hlx_sm_tsay` | `<time> <userid> <message>` | Displays top-left screen HUD alert |
-| `hlx_sm_hint` | `<userid> <message>` | Displays bottom hint alert |
-| `hlxce_webpage`| `<url>` | Sets configured web stats URL |
-| `hlxce_version`| `<version>` | Registers backend daemon version |
+| `hlx_sm_msay` | `<time> <userid> [need_handler] <message>` | Displays a multi-page scrollable OSD menu (`Core.Menu` when `MenuType = "1"` or Panorama CustomHud when `MenuType = "2"`). |
+| `hlx_sm_psay` | `"<userid_list>" [color] "<message>"` | Sends a color-formatted chat message to one or more players (or `"0"` for broadcast). |
+| `hlx_sm_psay2` | `"<userid_list>" [color] "<message>"` | Identical to `hlx_sm_psay` (secondary message channel). |
+| `hlx_sm_csay` | `"<message>"` | Displays a center-screen announcement (native CS2 center text when `MenuType = "1"`, or CustomHud banner when `MenuType = "2"`). |
+| `hlx_sm_tsay` | `<time> <userid> "<message>"` | Displays a top-left HUD alert (`MenuType = "2"`) or formatted chat notice (`MenuType = "1"`). |
+| `hlx_sm_hint` | `"<userid_list>" "<message>"` | Displays a center/bottom hint message to the specified player(s). |
+| `hlx_sm_browse` | `"<userid>" "<url>"` | Prints the target URL in player chat (fallback for legacy Source 1 MOTD commands). |
+| `hlx_sm_swap` | `"<userid>"` | Swaps a player between CT and T teams (used by daemon auto-balance). |
+| `hlx_sm_redirect` | `<time> "<userid>" "<ip:port>" "<reason>"` | Notifies a player of a server redirect target in chat. |
+| `hlx_sm_player_action` | `<userid> "<action>"` | Logs a custom player action to the daemon for bonus points. |
+| `hlx_sm_team_action` | `"<team>" "<action>"` | Logs a custom team action (`CT` / `TERRORIST`) to the daemon. |
+| `hlx_sm_world_action` | `"<action>"` | Logs a custom world/server action to the daemon. |
+| `hlx_protect_address` | `"<ip:port>"` | Registers a protected log address status. |
+| `hlx_block_commands` | `0\|1` | Enables (`1`) or disables (`0`) suppressing HLstatsX commands from appearing in public chat. |
+| `hlx_message_prefix` | `"<prefix>"` | Sets a custom prefix prepended to HLstatsX chat messages. |
+| `hlx_message_prefix_clear` | *(none)* | Resets the chat message prefix to default (`[HLstatsX]`). |
+| `hlxce_webpage` | `"<url>"` | Registers the HLstatsX web portal URL from the daemon. |
+| `hlxce_version` | `"<version>"` | Registers the connected HLstatsX daemon version. |
+
+---
+
+## 🔄 Updating an Existing HLstatsX Site with Local Customizations
+
+If you already host a customized HLstatsX:CE website (for example with custom themes, JS tweaks, or local layout changes) and only want to apply the **Counter-Strike 2 (`cs2`), SwiftlyS2 native OSD command parity, and October 2026 PHP 8.2–8.5 security/compatibility changes** without overwriting your entire `web/` folder, inspect the exact diff in commit [`007b223`](https://github.com/SyntX34/hlstatsx-community-edition/commit/007b223ee403c738a6b18baf9ee1f63013ba5a7e#diff-0e1a79d051518c85ddb92bcceb0a68de79281ba4654ad474a41902dee3910eb0).
 
 ---
 

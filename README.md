@@ -29,8 +29,13 @@ Database and has a PHP web frontend.
 > Date format: DD.MM.YYYY
 ---
 
-### :video_game: Counter-Strike 2 (SwiftlyS2) Setup & Debugging Guide
+### :video_game: Counter-Strike 2 (SwiftlyS2) Setup, Commands & Debugging Guide
 * **[CS2 Setup, Configuration, Proxy_Key & UDP Debugging Guide (CS2.md)](CS2.md)** — Complete step-by-step instructions for Linux and Windows, including `config.toml`, Web Admin `SWIFTLYS2` & `Proxy_Key` configuration, `systemd` / `journalctl` service setup, and `tcpdump` / PowerShell UDP packet verification.
+* **[SwiftlyS2 In-Game Plugin Documentation & Command Reference (swiftlys2/HLStatsX/README.md)](swiftlys2/HLStatsX/README.md)** — Complete reference for all in-game player commands (`!hlx`, `!rank`, `!top10`, `!top20`, `!next`, `!session`, `!statsme`, `!weapons`, `!accuracy`, `!targets`, `!kills`, `!actions`, `!maps`, per-weapon stats, auto-commands), `Core.Menu` navigation keybinds, daemon `HLX_CMD` commands, and the `HLStatsX.Contract` developer API.
+
+> **Updating an Existing Site with Local Customizations:**
+> If you have local changes or a custom theme on your HLstatsX web panel and want to review or apply only the patched files, check this commit:
+> [https://github.com/SyntX34/hlstatsx-community-edition/commit/007b223ee403c738a6b18baf9ee1f63013ba5a7e#diff-0e1a79d051518c85ddb92bcceb0a68de79281ba4654ad474a41902dee3910eb0](https://github.com/SyntX34/hlstatsx-community-edition/commit/007b223ee403c738a6b18baf9ee1f63013ba5a7e#diff-0e1a79d051518c85ddb92bcceb0a68de79281ba4654ad474a41902dee3910eb0)
 
 ### :busts_in_silhouette: Contributors
 * **SyntX34** — Counter-Strike 2 (SwiftlyS2) in-game plugin & API, October 2026 PHP security/compatibility patch, and Perl daemon performance & `systemd`/`journalctl` logging optimizations.
@@ -40,6 +45,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines and pull reque
 
 ### :book: Documentation
 * [CS2.md](CS2.md) — Counter-Strike 2 (SwiftlyS2) Installation & Debugging Guide
+* [swiftlys2/HLStatsX/README.md](swiftlys2/HLStatsX/README.md) — SwiftlyS2 CS2 Plugin Commands, Menu Controls & Developer API
 * [CONTRIBUTING.md](CONTRIBUTING.md) — Contribution & Development Guidelines
 * https://github.com/NomisCZ/hlstatsx-community-edition/wiki 🚧 Wiki - work in progress 🚧
 ### :speech_balloon: Help

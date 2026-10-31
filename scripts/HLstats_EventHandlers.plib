@@ -2510,13 +2510,27 @@ sub doEvent_Chat
 		
 		### status Addon
 		elsif ($message =~ /^\/?status([ ][0-9]+)?$/i) {
-			if ($g_servers{$s_addr}->{use_browser} > 0) {
+			my $server_id  = $g_servers{$s_addr}->{id};
+			if ($1 ne "") {
+				$server_id = substr($1, 1, length($1)-1);
+			}
+			if ($g_servers{$s_addr}->{mod} eq "SWIFTLYS2" && $g_servers{$s_addr}->{player_command_osd} ne "") {
+				my $srv_name = $g_servers{$s_addr}->{name} || "CS2 Server";
+				my $srv_map  = $g_servers{$s_addr}->{map} || "unknown";
+				my $srv_act  = $g_servers{$s_addr}->{numplayers} || 0;
+				my $srv_max  = $g_servers{$s_addr}->{maxplayers} || 0;
+				my $srv_k    = &number_format($g_servers{$s_addr}->{total_kills} + $g_servers{$s_addr}->{kills});
+				my $srv_hs   = &number_format($g_servers{$s_addr}->{total_headshots} + $g_servers{$s_addr}->{headshots});
+				my $osd_message = "->1 - Server Status\\n"
+					. "   Server: $srv_name\\n"
+					. "   Map: $srv_map ($srv_act/$srv_max Players)\\n"
+					. "   Total Kills: $srv_k (HS: $srv_hs)\\n";
+				my $osd_string = $g_servers{$s_addr}->quoteparam($osd_message);
+				my $cmd_str = sprintf("%s \"15\" %s %s", $g_servers{$s_addr}->{player_command_osd}, $p_userid, $osd_string);
+				$g_servers{$s_addr}->dorcon($cmd_str);
+			} elsif ($g_servers{$s_addr}->{use_browser} > 0) {
 				my $url        = $g_servers{$s_addr}->{ingame_url};
-				my $server_id  = $g_servers{$s_addr}->{id};
 				my $game       = $g_servers{$s_addr}->{game};
-				if ($1 ne "") {
-					$server_id = substr($1, 1, length($1)-1);
-				}
 				my $fullurl = $g_servers{$s_addr}->quoteparam(sprintf("%s/ingame.php?game=%s&mode=status&server_id=%s", $url, $game, $server_id));
 				my $browsecmd = $g_servers{$s_addr}->{browse_command};
 				if (($g_servers{$s_addr}->{"mod"} eq "BEETLE")) {
@@ -2524,30 +2538,75 @@ sub doEvent_Chat
 				} else {
 					$cmd_status = sprintf("%s %s %s", $browsecmd, $p_userid, $fullurl);
 				}
-			$g_servers{$s_addr}->dorcon($cmd_status);
+				$g_servers{$s_addr}->dorcon($cmd_status);
 			} 
 		}
 
 		### load Addon
 		elsif ($message =~ /^\/?load$/i) {
-		if ($g_servers{$s_addr}->{use_browser} > 0) {
-			my $url        = $g_servers{$s_addr}->{ingame_url};
-			my $server_id  = $g_servers{$s_addr}->{id};
-			my $game       = $g_servers{$s_addr}->{game};
-			my $fullurl = $g_servers{$s_addr}->quoteparam(sprintf("%s/ingame.php?mode=status&server_id=%s&mode=load", $url, $server_id));
-			my $browsecmd = $g_servers{$s_addr}->{browse_command};
-			if ($g_servers{$s_addr}->{"mod"} eq "BEETLE") {
-				$cmd_load = sprintf("%s %s say %s %s", $g_servers{$s_addr}->{exec_command}, $p_userid, $browsecmd, $fullurl);
-			} else {
-				$cmd_load = sprintf("%s %s %s", $browsecmd, $p_userid, $fullurl);
-			}
-			$g_servers{$s_addr}->dorcon($cmd_load);
+			if ($g_servers{$s_addr}->{mod} eq "SWIFTLYS2" && $g_servers{$s_addr}->{player_command_osd} ne "") {
+				my $srv_name = $g_servers{$s_addr}->{name} || "CS2 Server";
+				my $srv_map  = $g_servers{$s_addr}->{map} || "unknown";
+				my $srv_act  = $g_servers{$s_addr}->{numplayers} || 0;
+				my $srv_max  = $g_servers{$s_addr}->{maxplayers} || 0;
+				my $srv_min  = $g_servers{$s_addr}->{minplayers} || 0;
+				my $srv_trk  = $g_servers{$s_addr}->{num_trackable_players} || 0;
+				my $osd_message = "->1 - Server Load\\n"
+					. "   Server: $srv_name\\n"
+					. "   Map: $srv_map\\n"
+					. "   Active Slots: $srv_act / $srv_max\\n"
+					. "   Trackable Players: $srv_trk (Min: $srv_min)\\n";
+				my $osd_string = $g_servers{$s_addr}->quoteparam($osd_message);
+				my $cmd_str = sprintf("%s \"15\" %s %s", $g_servers{$s_addr}->{player_command_osd}, $p_userid, $osd_string);
+				$g_servers{$s_addr}->dorcon($cmd_str);
+			} elsif ($g_servers{$s_addr}->{use_browser} > 0) {
+				my $url        = $g_servers{$s_addr}->{ingame_url};
+				my $server_id  = $g_servers{$s_addr}->{id};
+				my $game       = $g_servers{$s_addr}->{game};
+				my $fullurl = $g_servers{$s_addr}->quoteparam(sprintf("%s/ingame.php?mode=status&server_id=%s&mode=load", $url, $server_id));
+				my $browsecmd = $g_servers{$s_addr}->{browse_command};
+				if ($g_servers{$s_addr}->{"mod"} eq "BEETLE") {
+					$cmd_load = sprintf("%s %s say %s %s", $g_servers{$s_addr}->{exec_command}, $p_userid, $browsecmd, $fullurl);
+				} else {
+					$cmd_load = sprintf("%s %s %s", $browsecmd, $p_userid, $fullurl);
+				}
+				$g_servers{$s_addr}->dorcon($cmd_load);
 			}
 		}
 
 		### servers Addon
-		elsif ($message =~ /^\/?servers$/i) {
-			if ($g_servers{$s_addr}->{use_browser} > 0) {
+		elsif ($message =~ /^\/?servers([ ][0-9]+)?$/i) {
+			if ($g_servers{$s_addr}->{mod} eq "SWIFTLYS2" && $g_servers{$s_addr}->{player_command_osd} ne "") {
+				my $game = $g_servers{$s_addr}->{game};
+				my $result = &doQuery("
+					SELECT
+						name, address, port, act_map, act_players, max_players
+					FROM
+						hlstats_Servers
+					WHERE
+						game='".&quoteSQL($game)."'
+					ORDER BY
+						sortorder, name, serverId
+					LIMIT 0, 12
+				");
+				my $osd_message = "->1 - Participating Servers\\n";
+				my $i = 0;
+				while (my ($sname, $saddr, $sport, $smap, $sact, $smax) = $result->fetchrow_array) {
+					$i++;
+					if (length($sname) > 22) {
+						$sname = substr($sname, 0, 19)."...";
+					}
+					$smap = $smap || "-";
+					$osd_message .= sprintf("   %02d  %s [%s] (%d/%d)\\n", $i, $sname, $smap, $sact, $smax);
+				}
+				$result->finish;
+				if ($i == 0) {
+					$osd_message .= "   No servers found\\n";
+				}
+				my $osd_string = $g_servers{$s_addr}->quoteparam($osd_message);
+				my $cmd_str = sprintf("%s \"15\" %s %s", $g_servers{$s_addr}->{player_command_osd}, $p_userid, $osd_string);
+				$g_servers{$s_addr}->dorcon($cmd_str);
+			} elsif ($g_servers{$s_addr}->{use_browser} > 0) {
 				my $url        = $g_servers{$s_addr}->{ingame_url};
 				my $game       = $g_servers{$s_addr}->{game};
 				my $fullurl = $g_servers{$s_addr}->quoteparam(sprintf("%s/ingame.php?game=%s&mode=servers", $url, $game));
@@ -2563,7 +2622,37 @@ sub doEvent_Chat
 
 		### cheaters Addon
 		elsif ($message =~ /^\/?cheaters$/i || $message =~ /^\/?bans$/i) {
-			if ($g_servers{$s_addr}->{use_browser} > 0)  {
+			if ($g_servers{$s_addr}->{mod} eq "SWIFTLYS2" && $g_servers{$s_addr}->{player_command_osd} ne "") {
+				my $game = $g_servers{$s_addr}->{game};
+				my $result = &doQuery("
+					SELECT
+						lastName, skill, kills, deaths
+					FROM
+						hlstats_Players
+					WHERE
+						game='".&quoteSQL($game)."'
+						AND hideranking = 2
+					ORDER BY
+						last_event DESC
+					LIMIT 0, 10
+				");
+				my $osd_message = "->1 - Banned / Cheaters\\n";
+				my $i = 0;
+				while (my ($bname, $bskill, $bkills, $bdeaths) = $result->fetchrow_array) {
+					$i++;
+					if (length($bname) > 20) {
+						$bname = substr($bname, 0, 17)."...";
+					}
+					$osd_message .= sprintf("   %02d  %s (%d pts, %d:%d)\\n", $i, $bname, $bskill, $bkills, $bdeaths);
+				}
+				$result->finish;
+				if ($i == 0) {
+					$osd_message .= "   No banned players recorded\\n";
+				}
+				my $osd_string = $g_servers{$s_addr}->quoteparam($osd_message);
+				my $cmd_str = sprintf("%s \"15\" %s %s", $g_servers{$s_addr}->{player_command_osd}, $p_userid, $osd_string);
+				$g_servers{$s_addr}->dorcon($cmd_str);
+			} elsif ($g_servers{$s_addr}->{use_browser} > 0)  {
 				my $url        = $g_servers{$s_addr}->{ingame_url};
 				my $game       = $g_servers{$s_addr}->{game};
 				my $fullurl = $g_servers{$s_addr}->quoteparam(sprintf("%s/ingame.php?game=%s&mode=bans", $url, $game));
@@ -2579,7 +2668,43 @@ sub doEvent_Chat
 
 		### Actions Addon
 		elsif (($message =~ /^\/?action$/i) || ($message =~ /^\/?actions$/i)) {
-			if ($g_servers{$s_addr}->{use_browser} > 0)  {
+			if ($g_servers{$s_addr}->{mod} eq "SWIFTLYS2" && $g_servers{$s_addr}->{player_command_osd} ne "") {
+				my $p_playerid = $player->{playerid};
+				my $result = &doQuery("
+					SELECT
+						hlstats_Actions.description,
+						COUNT(hlstats_Events_PlayerActions.id) AS obj_count,
+						COUNT(hlstats_Events_PlayerActions.id) * hlstats_Actions.reward_player AS obj_bonus
+					FROM
+						hlstats_Actions
+					LEFT JOIN
+						hlstats_Events_PlayerActions ON hlstats_Events_PlayerActions.actionId = hlstats_Actions.id
+					WHERE
+						hlstats_Events_PlayerActions.playerId = $p_playerid
+					GROUP BY
+						hlstats_Actions.id
+					ORDER BY
+						obj_count DESC
+					LIMIT 0, 10
+				");
+				my $osd_message = "->1 - Action Summary\\n";
+				my $i = 0;
+				while (my ($adesc, $acount, $abonus) = $result->fetchrow_array) {
+					$i++;
+					if (length($adesc) > 22) {
+						$adesc = substr($adesc, 0, 19)."...";
+					}
+					my $sign = ($abonus >= 0) ? "+$abonus" : "$abonus";
+					$osd_message .= sprintf("   %02d  %s: %d (%s pts)\\n", $i, $adesc, $acount, $sign);
+				}
+				$result->finish;
+				if ($i == 0) {
+					$osd_message .= "   No actions recorded yet\\n";
+				}
+				my $osd_string = $g_servers{$s_addr}->quoteparam($osd_message);
+				my $cmd_str = sprintf("%s \"15\" %s %s", $g_servers{$s_addr}->{player_command_osd}, $p_userid, $osd_string);
+				$g_servers{$s_addr}->dorcon($cmd_str);
+			} elsif ($g_servers{$s_addr}->{use_browser} > 0)  {
 				my $p_playerid = $player->{playerid};
 				my $url        = $g_servers{$s_addr}->{ingame_url};
 				my $game       = $g_servers{$s_addr}->{game};
@@ -2597,7 +2722,43 @@ sub doEvent_Chat
 
 		### Accuracy Addon
 		elsif ($message =~ /^\/?accuracy$/i) {
-			if ($g_servers{$s_addr}->{use_browser} > 0) {
+			if ($g_servers{$s_addr}->{mod} eq "SWIFTLYS2" && $g_servers{$s_addr}->{player_command_osd} ne "") {
+				my $p_playerid = $player->{playerid};
+				my $game       = $g_servers{$s_addr}->{game};
+				my $result = &doQuery("
+					SELECT
+						hlstats_Events_Statsme.weapon,
+						SUM(hlstats_Events_Statsme.shots) AS sm_shots,
+						SUM(hlstats_Events_Statsme.hits) AS sm_hits,
+						SUM(hlstats_Events_Statsme.headshots) AS sm_hs,
+						IFNULL(ROUND((SUM(hlstats_Events_Statsme.hits) / SUM(hlstats_Events_Statsme.shots) * 100), 1), 0) AS sm_acc
+					FROM
+						hlstats_Events_Statsme
+					WHERE
+						hlstats_Events_Statsme.PlayerId = $p_playerid
+					GROUP BY
+						hlstats_Events_Statsme.weapon
+					HAVING
+						sm_shots > 0
+					ORDER BY
+						sm_acc DESC, sm_hits DESC
+					LIMIT 0, 10
+				");
+				my $osd_message = "->1 - Weapon Accuracy\\n";
+				my $i = 0;
+				while (my ($wcode, $wshots, $whits, $whs, $wacc) = $result->fetchrow_array) {
+					$i++;
+					my $wname = $g_games{$game}{weapons}{$wcode}{name} || $wcode;
+					$osd_message .= sprintf("   %02d  %s: %s%% (%d/%d, %d HS)\\n", $i, $wname, $wacc, $whits, $wshots, $whs);
+				}
+				$result->finish;
+				if ($i == 0) {
+					$osd_message .= "   No weapon accuracy data yet\\n";
+				}
+				my $osd_string = $g_servers{$s_addr}->quoteparam($osd_message);
+				my $cmd_str = sprintf("%s \"15\" %s %s", $g_servers{$s_addr}->{player_command_osd}, $p_userid, $osd_string);
+				$g_servers{$s_addr}->dorcon($cmd_str);
+			} elsif ($g_servers{$s_addr}->{use_browser} > 0) {
 				my $p_playerid = $player->{playerid};
 				my $url        = $g_servers{$s_addr}->{ingame_url};
 				my $game       = $g_servers{$s_addr}->{game};
@@ -2614,7 +2775,43 @@ sub doEvent_Chat
 
 		### Targets Addon
 		elsif (($message =~ /^\/?targets$/i) || ($message =~ /^\/?target$/i)) {
-			if ($g_servers{$s_addr}->{use_browser} > 0)  {
+			if ($g_servers{$s_addr}->{mod} eq "SWIFTLYS2" && $g_servers{$s_addr}->{player_command_osd} ne "") {
+				my $p_playerid = $player->{playerid};
+				my $result = &doQuery("
+					SELECT
+						SUM(hlstats_Events_Statsme2.head) AS sm_head,
+						SUM(hlstats_Events_Statsme2.chest) AS sm_chest,
+						SUM(hlstats_Events_Statsme2.stomach) AS sm_stomach,
+						SUM(hlstats_Events_Statsme2.leftarm) AS sm_leftarm,
+						SUM(hlstats_Events_Statsme2.rightarm) AS sm_rightarm,
+						SUM(hlstats_Events_Statsme2.leftleg) AS sm_leftleg,
+						SUM(hlstats_Events_Statsme2.rightleg) AS sm_rightleg
+					FROM
+						hlstats_Events_Statsme2
+					WHERE
+						hlstats_Events_Statsme2.PlayerId = $p_playerid
+				");
+				my ($h_head, $h_chest, $h_stomach, $h_larm, $h_rarm, $h_lleg, $h_rleg) = $result->fetchrow_array;
+				$result->finish;
+				$h_head ||= 0; $h_chest ||= 0; $h_stomach ||= 0;
+				$h_larm ||= 0; $h_rarm ||= 0; $h_lleg ||= 0; $h_rleg ||= 0;
+				my $total_hits = $h_head + $h_chest + $h_stomach + $h_larm + $h_rarm + $h_lleg + $h_rleg;
+				my $osd_message = "->1 - Hitgroup Targets\\n";
+				if ($total_hits > 0) {
+					$osd_message .= sprintf("   Head:      %d (%.1f%%)\\n", $h_head, ($h_head * 100 / $total_hits));
+					$osd_message .= sprintf("   Chest:     %d (%.1f%%)\\n", $h_chest, ($h_chest * 100 / $total_hits));
+					$osd_message .= sprintf("   Stomach:   %d (%.1f%%)\\n", $h_stomach, ($h_stomach * 100 / $total_hits));
+					$osd_message .= sprintf("   Left Arm:  %d (%.1f%%)\\n", $h_larm, ($h_larm * 100 / $total_hits));
+					$osd_message .= sprintf("   Right Arm: %d (%.1f%%)\\n", $h_rarm, ($h_rarm * 100 / $total_hits));
+					$osd_message .= sprintf("   Left Leg:  %d (%.1f%%)\\n", $h_lleg, ($h_lleg * 100 / $total_hits));
+					$osd_message .= sprintf("   Right Leg: %d (%.1f%%)\\n", $h_rleg, ($h_rleg * 100 / $total_hits));
+				} else {
+					$osd_message .= "   No hitgroup data recorded yet\\n";
+				}
+				my $osd_string = $g_servers{$s_addr}->quoteparam($osd_message);
+				my $cmd_str = sprintf("%s \"15\" %s %s", $g_servers{$s_addr}->{player_command_osd}, $p_userid, $osd_string);
+				$g_servers{$s_addr}->dorcon($cmd_str);
+			} elsif ($g_servers{$s_addr}->{use_browser} > 0)  {
 				my $p_playerid = $player->{playerid};
 				my $url        = $g_servers{$s_addr}->{ingame_url};
 				my $game       = $g_servers{$s_addr}->{game};
@@ -2631,7 +2828,48 @@ sub doEvent_Chat
 
 		### Clans Addon
 		elsif ($message =~ /^\/?clans$/i) {
-			if ($g_servers{$s_addr}->{use_browser} > 0)  {
+			if ($g_servers{$s_addr}->{mod} eq "SWIFTLYS2" && $g_servers{$s_addr}->{player_command_osd} ne "") {
+				my $game = $g_servers{$s_addr}->{game};
+				my $result = &doQuery("
+					SELECT
+						hlstats_Clans.tag,
+						hlstats_Clans.name,
+						ROUND(AVG(hlstats_Players.skill)) AS avg_skill,
+						COUNT(hlstats_Players.playerId) AS members
+					FROM
+						hlstats_Clans
+					INNER JOIN
+						hlstats_Players ON hlstats_Players.clan = hlstats_Clans.clanId
+					WHERE
+						hlstats_Clans.game='".&quoteSQL($game)."'
+						AND hlstats_Clans.hidden = 0
+						AND hlstats_Players.hideranking = 0
+					GROUP BY
+						hlstats_Clans.clanId
+					HAVING
+						members >= 1
+					ORDER BY
+						avg_skill DESC, members DESC
+					LIMIT 0, 10
+				");
+				my $osd_message = "->1 - Top Clans\\n";
+				my $i = 0;
+				while (my ($ctag, $cname, $cskill, $cmembers) = $result->fetchrow_array) {
+					$i++;
+					my $label = ($cname ne "" && $cname ne $ctag) ? "$ctag ($cname)" : $ctag;
+					if (length($label) > 20) {
+						$label = substr($label, 0, 17)."...";
+					}
+					$osd_message .= sprintf("   %02d  %s - %s pts (%d mbrs)\\n", $i, $label, &number_format($cskill), $cmembers);
+				}
+				$result->finish;
+				if ($i == 0) {
+					$osd_message .= "   No clans ranked yet\\n";
+				}
+				my $osd_string = $g_servers{$s_addr}->quoteparam($osd_message);
+				my $cmd_str = sprintf("%s \"15\" %s %s", $g_servers{$s_addr}->{player_command_osd}, $p_userid, $osd_string);
+				$g_servers{$s_addr}->dorcon($cmd_str);
+			} elsif ($g_servers{$s_addr}->{use_browser} > 0)  {
 				my $url        = $g_servers{$s_addr}->{ingame_url};
 				my $game       = $g_servers{$s_addr}->{game};
 				my $fullurl = $g_servers{$s_addr}->quoteparam(sprintf("%s/ingame.php?game=%s&mode=clans", $url, $game));
@@ -2651,19 +2889,21 @@ sub doEvent_Chat
 				my $playerName = $player->{name};
 				my ($ranknumber, $totalplayers, $osd_message) = get_next_ranks($player);
 				$osd_string = $g_servers{$s_addr}->quoteparam($osd_message);
-				$cmd_str    = sprintf("%s \"10\" %s %s", $g_servers{$s_addr}->{"player_command_osd"}, $p_userid, $osd_string);
+				$cmd_str    = sprintf("%s \"15\" %s %s", $g_servers{$s_addr}->{"player_command_osd"}, $p_userid, $osd_string);
 				$g_servers{$s_addr}->dorcon($cmd_str);
 			}
 		} 
 
 		### Begin of Top-Players Addon
-		elsif ($message =~ /^\/?top\d{1,2}?$/i) {
+		elsif ($message =~ /^\/?top(\d{0,2})?$/i) {
 			my $limit = 10;
-			$message =~ /top(\d*)/i;
-			if ($1 > 12) {
-				$limit = 12;
-			} else {
-				$limit = $1;
+			if (defined($1) && $1 ne "") {
+				$limit = int($1);
+				if ($limit <= 0) {
+					$limit = 10;
+				} elsif ($limit > 20) {
+					$limit = 20;
+				}
 			}
 			if ($g_servers{$s_addr}->{player_command_osd} ne "") {
 				my $result = &doQuery("
@@ -2685,7 +2925,7 @@ sub doEvent_Chat
 					$rankword = " kills";
 				}
 				
-				my $osd_message = "->1 - Top Players\\n";
+				my $osd_message = "->1 - Top $limit Players\\n";
 				my $i           = 0;
 				my $last_base  = "";
 				while (my($base, $lastName) = $result->fetchrow_array) {
@@ -2722,7 +2962,15 @@ sub doEvent_Chat
 
 		### Begin of statsme Addon
 		elsif ($message =~ /^\/?statsme$/i) {
-			if ($g_servers{$s_addr}->{use_browser} > 0) {
+			if ($g_servers{$s_addr}->{mod} eq "SWIFTLYS2" && $g_servers{$s_addr}->{player_command_osd} ne "") {
+				my ($skill, $kills, $deaths, $kd, $suicides, $headshots, $hpk, $acc, $connection_time, $fav_weapon, $fav_weapon_kills, $fav_weapon_acc, $s_fav_weapon, $s_fav_weapon_kills, $s_fav_weapon_acc, $ranknumber, $totalplayers) = get_player_data($player, 1);
+				if ($ranknumber == 0) {
+					$ranknumber = "(HIDDEN)";
+				}
+				my $osd_string = get_menu_text($player, $skill, $kills, $deaths, $kd, $suicides, $headshots, $hpk, $acc, $connection_time, $fav_weapon, $fav_weapon_kills, $fav_weapon_acc, $s_fav_weapon, $s_fav_weapon_kills, $s_fav_weapon_acc, $ranknumber, $totalplayers);
+				my $cmd_str = sprintf("%s \"15\" %s %s", $g_servers{$s_addr}->{player_command_osd}, $p_userid, $g_servers{$s_addr}->quoteparam($osd_string));
+				$g_servers{$s_addr}->dorcon($cmd_str);
+			} elsif ($g_servers{$s_addr}->{use_browser} > 0) {
 				my $p_playerid = $player->{playerid};
 				my $url        = $g_servers{$s_addr}->{ingame_url};
 				my $game       = $g_servers{$s_addr}->{game};
@@ -2739,8 +2987,41 @@ sub doEvent_Chat
 		### End of statsme Addon
 
 		### Begin Player-Weapons Addon
-		elsif (($message =~ /^\/?weapon$/i) || ($message =~ /^\/?weapons$/i)) {
-			if ($g_servers{$s_addr}->{use_browser} > 0)  {
+		elsif (($message =~ /^\/?weapon$/i) || ($message =~ /^\/?weapons$/i) || ($message =~ /^\/?weapon_usage$/i)) {
+			if ($g_servers{$s_addr}->{mod} eq "SWIFTLYS2" && $g_servers{$s_addr}->{player_command_osd} ne "") {
+				my $p_playerid = $player->{playerid};
+				my $game       = $g_servers{$s_addr}->{game};
+				my $result = &doQuery("
+					SELECT
+						hlstats_Events_Frags.weapon,
+						COUNT(hlstats_Events_Frags.weapon) AS wkills,
+						SUM(hlstats_Events_Frags.headshot=1) AS whs
+					FROM
+						hlstats_Events_Frags
+					WHERE
+						hlstats_Events_Frags.killerId = $p_playerid
+					GROUP BY
+						hlstats_Events_Frags.weapon
+					ORDER BY
+						wkills DESC, whs DESC
+					LIMIT 0, 10
+				");
+				my $osd_message = "->1 - Weapon Usage\\n";
+				my $i = 0;
+				while (my ($wcode, $wkills, $whs) = $result->fetchrow_array) {
+					$i++;
+					my $wname = $g_games{$game}{weapons}{$wcode}{name} || $wcode;
+					my $whpk = ($wkills > 0) ? sprintf("%.0f", ($whs * 100 / $wkills)) : 0;
+					$osd_message .= sprintf("   %02d  %s: %d kills (%d HS, %s%%)\\n", $i, $wname, $wkills, $whs, $whpk);
+				}
+				$result->finish;
+				if ($i == 0) {
+					$osd_message .= "   No weapon kills recorded yet\\n";
+				}
+				my $osd_string = $g_servers{$s_addr}->quoteparam($osd_message);
+				my $cmd_str = sprintf("%s \"15\" %s %s", $g_servers{$s_addr}->{player_command_osd}, $p_userid, $osd_string);
+				$g_servers{$s_addr}->dorcon($cmd_str);
+			} elsif ($g_servers{$s_addr}->{use_browser} > 0)  {
 				my $p_playerid = $player->{playerid};
 				my $url        = $g_servers{$s_addr}->{ingame_url};
 				my $game       = $g_servers{$s_addr}->{game};
@@ -2758,7 +3039,42 @@ sub doEvent_Chat
 
 		### Begin Player-Kills Addon
 		elsif (($message =~ /^\/?kill$/i) || ($message =~ /^\/?kills$/i) || ($message =~ /^\/?player_kills$/i)) {
-			if ($g_servers{$s_addr}->{use_browser} > 0) {
+			if ($g_servers{$s_addr}->{mod} eq "SWIFTLYS2" && $g_servers{$s_addr}->{player_command_osd} ne "") {
+				my $p_playerid = $player->{playerid};
+				my $result = &doQuery("
+					SELECT
+						hlstats_Players.lastName,
+						COUNT(hlstats_Events_Frags.id) AS vkills,
+						SUM(hlstats_Events_Frags.headshot=1) AS vhs
+					FROM
+						hlstats_Events_Frags
+					INNER JOIN
+						hlstats_Players ON hlstats_Players.playerId = hlstats_Events_Frags.victimId
+					WHERE
+						hlstats_Events_Frags.killerId = $p_playerid
+					GROUP BY
+						hlstats_Events_Frags.victimId
+					ORDER BY
+						vkills DESC, vhs DESC
+					LIMIT 0, 10
+				");
+				my $osd_message = "->1 - Top Victims Killed\\n";
+				my $i = 0;
+				while (my ($vname, $vkills, $vhs) = $result->fetchrow_array) {
+					$i++;
+					if (length($vname) > 20) {
+						$vname = substr($vname, 0, 17)."...";
+					}
+					$osd_message .= sprintf("   %02d  %s: %d kills (%d HS)\\n", $i, $vname, $vkills, $vhs);
+				}
+				$result->finish;
+				if ($i == 0) {
+					$osd_message .= "   No player kills recorded yet\\n";
+				}
+				my $osd_string = $g_servers{$s_addr}->quoteparam($osd_message);
+				my $cmd_str = sprintf("%s \"15\" %s %s", $g_servers{$s_addr}->{player_command_osd}, $p_userid, $osd_string);
+				$g_servers{$s_addr}->dorcon($cmd_str);
+			} elsif ($g_servers{$s_addr}->{use_browser} > 0) {
 				my $p_playerid = $player->{playerid};
 				my $url        = $g_servers{$s_addr}->{ingame_url};
 				my $game       = $g_servers{$s_addr}->{game};
@@ -2776,7 +3092,37 @@ sub doEvent_Chat
 
 		### Begin Player-Map Performance Addon
 		elsif (($message =~ /^\/?maps$/i) || ($message =~ /^\/?map_stats$/i) || ($message =~ /^\/?map$/i)) {
-			if ($g_servers{$s_addr}->{use_browser} > 0) {
+			if ($g_servers{$s_addr}->{mod} eq "SWIFTLYS2" && $g_servers{$s_addr}->{player_command_osd} ne "") {
+				my $p_playerid = $player->{playerid};
+				my $result = &doQuery("
+					SELECT
+						IF(hlstats_Events_Frags.map='', '(Unassigned)', hlstats_Events_Frags.map) AS mapname,
+						COUNT(hlstats_Events_Frags.id) AS mkills,
+						SUM(hlstats_Events_Frags.headshot=1) AS mhs
+					FROM
+						hlstats_Events_Frags
+					WHERE
+						hlstats_Events_Frags.killerId = $p_playerid
+					GROUP BY
+						hlstats_Events_Frags.map
+					ORDER BY
+						mkills DESC
+					LIMIT 0, 10
+				");
+				my $osd_message = "->1 - Map Performance\\n";
+				my $i = 0;
+				while (my ($mname, $mkills, $mhs) = $result->fetchrow_array) {
+					$i++;
+					$osd_message .= sprintf("   %02d  %s: %d kills (%d HS)\\n", $i, $mname, $mkills, $mhs);
+				}
+				$result->finish;
+				if ($i == 0) {
+					$osd_message .= "   No map kills recorded yet\\n";
+				}
+				my $osd_string = $g_servers{$s_addr}->quoteparam($osd_message);
+				my $cmd_str = sprintf("%s \"15\" %s %s", $g_servers{$s_addr}->{player_command_osd}, $p_userid, $osd_string);
+				$g_servers{$s_addr}->dorcon($cmd_str);
+			} elsif ($g_servers{$s_addr}->{use_browser} > 0) {
 				my $p_playerid = $player->{playerid};
 				my $url        = $g_servers{$s_addr}->{ingame_url};
 				my $game       = $g_servers{$s_addr}->{game};
@@ -2794,7 +3140,22 @@ sub doEvent_Chat
 
 		### Begin Help Addon
 		elsif (($message =~ /^\/?help$/i) || ($message =~ /^\/?cmd$/i) || ($message =~ /^\/?cmds$/i) || ($message =~ /^\/?commands$/i)) {
-			if ($g_servers{$s_addr}->{use_browser} > 0)  {
+			if ($g_servers{$s_addr}->{mod} eq "SWIFTLYS2" && $g_servers{$s_addr}->{player_command_osd} ne "") {
+				my $osd_message = "->1 - HLstatsX:CE Commands\\n"
+					. "   !hlx / !menu - Open Stats Menu\\n"
+					. "   !rank / !skill / !points - Your Rank\\n"
+					. "   !top5 / !top10 / !top20 - Top Players\\n"
+					. "   !next - Players Ranked Above You\\n"
+					. "   !session / !session_data - Session Stats\\n"
+					. "   !kpd / !kdratio / !kdeath - K/D Stats\\n"
+					. "   !statsme / !weapons / !accuracy - Weapons\\n"
+					. "   !targets / !kills / !actions / !maps - Details\\n"
+					. "   !clans / !servers / !status / !load - Server\\n"
+					. "   !hlx_display 0|1 / !hlx_hideranking - Options\\n";
+				my $osd_string = $g_servers{$s_addr}->quoteparam($osd_message);
+				my $cmd_str = sprintf("%s \"15\" %s %s", $g_servers{$s_addr}->{player_command_osd}, $p_userid, $osd_string);
+				$g_servers{$s_addr}->dorcon($cmd_str);
+			} elsif ($g_servers{$s_addr}->{use_browser} > 0)  {
 				my $url        = $g_servers{$s_addr}->{ingame_url};
 				my $game       = $g_servers{$s_addr}->{game};
 				my $fullurl = $g_servers{$s_addr}->quoteparam(sprintf("%s/ingame.php?game=%s&mode=help", $url, $game));
@@ -2809,6 +3170,54 @@ sub doEvent_Chat
 			}
 		}
 		### End of Help Addon
+
+		elsif ($message =~ /^\/?(knife|usp|usp_silencer|hkp2000|glock|deagle|p228|p250|cz75a|revolver|tec9|m3|nova|mag7|sawedoff|xm1014|mp5navy|mp5sd|mp7|mp9|bizon|tmp|p90|m4a1|m4a1_silencer|ak47|sg552|sg556|scout|ssg08|awp|g3sg1|scar20|m249|negev|hegrenade|flashbang|smokegrenade|inferno|molotov|incgrenade|decoy|taser|elite|aug|mac10|fiveseven|ump45|sg550|famas|galil|galilar)$/i) {
+			my $req_wcode = lc($1);
+			if ($g_servers{$s_addr}->{mod} eq "SWIFTLYS2" && $g_servers{$s_addr}->{player_command_osd} ne "") {
+				my $p_playerid = $player->{playerid};
+				my $game       = $g_servers{$s_addr}->{game};
+				my $wname      = $g_games{$game}{weapons}{$req_wcode}{name} || $req_wcode;
+				my $result = &doQuery("
+					SELECT
+						COUNT(hlstats_Events_Frags.id) AS wkills,
+						SUM(hlstats_Events_Frags.headshot=1) AS whs
+					FROM
+						hlstats_Events_Frags
+					WHERE
+						hlstats_Events_Frags.killerId = $p_playerid
+						AND hlstats_Events_Frags.weapon = '".&quoteSQL($req_wcode)."'
+				");
+				my ($wkills, $whs) = $result->fetchrow_array;
+				$result->finish;
+				$wkills ||= 0;
+				$whs    ||= 0;
+				my $whpk = ($wkills > 0) ? sprintf("%.1f", ($whs * 100 / $wkills)) : "0.0";
+
+				my $sm_res = &doQuery("
+					SELECT
+						SUM(shots), SUM(hits), SUM(damage)
+					FROM
+						hlstats_Events_Statsme
+					WHERE
+						PlayerId = $p_playerid
+						AND weapon = '".&quoteSQL($req_wcode)."'
+				");
+				my ($wshots, $whits, $wdmg) = $sm_res->fetchrow_array;
+				$sm_res->finish;
+				$wshots ||= 0;
+				$whits  ||= 0;
+				$wdmg   ||= 0;
+				my $wacc = ($wshots > 0) ? sprintf("%.1f", ($whits * 100 / $wshots)) : "0.0";
+
+				my $osd_message = "->1 - Weapon: $wname\\n"
+					. "   Kills: $wkills ($whs HS, $whpk%)\\n"
+					. "   Shots / Hits: $wshots / $whits ($wacc% Acc)\\n"
+					. "   Total Damage: $wdmg\\n";
+				my $osd_string = $g_servers{$s_addr}->quoteparam($osd_message);
+				my $cmd_str = sprintf("%s \"15\" %s %s", $g_servers{$s_addr}->{player_command_osd}, $p_userid, $osd_string);
+				$g_servers{$s_addr}->dorcon($cmd_str);
+			}
+		}
 
 	} # end if player  
     
@@ -2859,13 +3268,15 @@ sub doEvent_ChangeMap
 		$g_servers{$s_addr}->updateDB();
 		while (my($pl, $player) = each(%g_players) )
 		{
-			$player->set("team", "");
+			if ($g_servers{$s_addr}->{mod} ne "SWIFTLYS2" && $g_servers{$s_addr}->{play_game} != CS2()) {
+				$player->set("team", "");
+				$player->{trackable} = 0;
+			}
 			$player->set("map_kills", "0");
 			$player->set("map_deaths", "0");
 			$player->set("map_headshots", "0");
 			$player->set("map_shots", "0");
 			$player->set("map_hits", "0");
-			$player->{trackable} = 0;
 		}
 		$g_servers{$s_addr}->updatePlayerCount();
 		$g_servers{$s_addr}->{map} = $newmap;

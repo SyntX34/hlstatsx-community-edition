@@ -243,12 +243,13 @@ public partial class HLStatsX : BasePlugin
 
             var trimmedText = text.Trim();
 
-            /* Silently ignore slash commands, do not forward to daemon or process */
-            if (trimmedText.StartsWith('/')) return HookResult.Continue;
-
             string cleaned = trimmedText;
-            if (cleaned.StartsWith('!'))
+            bool hasPrefix = false;
+            if (cleaned.StartsWith('!') || cleaned.StartsWith('/'))
+            {
+                hasPrefix = true;
                 cleaned = cleaned.Substring(1).Trim();
+            }
 
             var parts = cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length > 0)
@@ -260,14 +261,17 @@ public partial class HLStatsX : BasePlugin
                     return HookResult.Handled;
                 }
 
-                if (IsStatCommand(cmd))
+                if (IsStatCommand(cmd, cleaned))
                 {
                     string verb = teamOnly ? "say_team" : "say";
                     SendLog(player, cleaned, verb);
-                    if (_blockChatCommands) return HookResult.Handled;
+                    if (_blockChatCommands || hasPrefix) return HookResult.Handled;
                     return HookResult.Continue;
                 }
             }
+
+            /* Ignore non-HLstatsX slash commands so they don't get logged to public chat */
+            if (trimmedText.StartsWith('/')) return HookResult.Continue;
 
             string chatVerb = teamOnly ? "say_team" : "say";
             SendLog(player, trimmedText, chatVerb);
@@ -528,6 +532,10 @@ public partial class HLStatsX : BasePlugin
                 _ => "Unassigned"
             };
             SendLog(player, team, "joined team");
+            if (team == "TERRORIST" || team == "CT")
+                _mapAnnouncedPlayers.Add(player.PlayerID);
+            else
+                _mapAnnouncedPlayers.Remove(player.PlayerID);
             SendPlayerClanTag(player);
             return HookResult.Continue;
         });
@@ -573,6 +581,7 @@ public partial class HLStatsX : BasePlugin
                 _playerStreak.Remove(player.SteamID);
                 _playerClanTags.Remove(player.SteamID);
             }
+            _mapConnectedPlayers.Remove(player.PlayerID);
             _mapAnnouncedPlayers.Remove(player.PlayerID);
             FlushPlayerWeaponStats(player);
             var name   = player.Name.Replace('"', '\'');
@@ -811,7 +820,7 @@ public partial class HLStatsX : BasePlugin
     private void HandleMapLoad(IOnMapLoadEvent @event)
     {
         ClearAllMapState();
-        EnsureUdpConnection();
+        RestartUdpConnection();
 
         var rawMap = @event.MapName ?? "";
         var mapName = rawMap.Contains('/')
@@ -825,6 +834,10 @@ public partial class HLStatsX : BasePlugin
         /* Re-announce players who remained connected across the map transition */
         AnnounceAllConnectedPlayers();
         Core.Scheduler.DelayBySeconds(2.0f, () =>
+        {
+            AnnounceAllConnectedPlayers();
+        });
+        Core.Scheduler.DelayBySeconds(5.0f, () =>
         {
             AnnounceAllConnectedPlayers();
         });
@@ -845,6 +858,7 @@ public partial class HLStatsX : BasePlugin
         _Statsme2.Clear();
         _playerStreak.Clear();
         _playerClanTags.Clear();
+        _mapConnectedPlayers.Clear();
         _mapAnnouncedPlayers.Clear();
         _customHudStatsState.Clear();
 
@@ -1291,6 +1305,24 @@ public partial class HLStatsX : BasePlugin
     {
         if (string.IsNullOrWhiteSpace(message)) return;
 
+        bool isCustomHud = _config.MenuType.Equals("2", StringComparison.OrdinalIgnoreCase) ||
+                           _config.MenuType.Equals("CustomHud", StringComparison.OrdinalIgnoreCase);
+
+        if (!isCustomHud)
+        {
+            if (target != null)
+            {
+                if (target.IsValid && !target.IsFakeClient)
+                    target.SendMessage(MessageType.Center, message);
+            }
+            else
+            {
+                foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(p => !p.IsFakeClient))
+                    p.SendMessage(MessageType.Center, message);
+            }
+            return;
+        }
+
         IEnumerable<IPlayer> recipients = target != null
             ? (target.IsValid && !target.IsFakeClient ? new[] { target } : Array.Empty<IPlayer>())
             : Core.PlayerManager.GetAllValidPlayers().Where(p => !p.IsFakeClient);
@@ -1341,7 +1373,7 @@ public partial class HLStatsX : BasePlugin
             catch (Exception ex)
             {
                 Console.WriteLine($"[HLstatsX:CE] ShowCenterHud error: {ex.Message}");
-                try { player.SendMessage(MessageType.Alert, message); } catch { }
+                try { player.SendMessage(MessageType.Center, message); } catch { }
             }
         }
     }
@@ -1349,6 +1381,23 @@ public partial class HLStatsX : BasePlugin
     private void ShowTopLeftHud(IPlayer? target, string message, float duration = 4f)
     {
         if (string.IsNullOrWhiteSpace(message)) return;
+
+        bool isCustomHud = _config.MenuType.Equals("2", StringComparison.OrdinalIgnoreCase) ||
+                           _config.MenuType.Equals("CustomHud", StringComparison.OrdinalIgnoreCase);
+
+        if (!isCustomHud)
+        {
+            if (target != null)
+            {
+                if (target.IsValid && !target.IsFakeClient)
+                    SendChatMessage(target, message);
+            }
+            else
+            {
+                BroadcastChatMessage(message);
+            }
+            return;
+        }
 
         IEnumerable<IPlayer> recipients = target != null
             ? (target.IsValid && !target.IsFakeClient ? new[] { target } : Array.Empty<IPlayer>())
@@ -1400,7 +1449,7 @@ public partial class HLStatsX : BasePlugin
             catch (Exception ex)
             {
                 Console.WriteLine($"[HLstatsX:CE] ShowTopLeftHud error: {ex.Message}");
-                try { player.SendMessage(MessageType.Alert, message); } catch { }
+                try { SendChatMessage(player, message); } catch { }
             }
         }
     }
@@ -1617,13 +1666,22 @@ public partial class HLStatsX : BasePlugin
         }
     }
 
+    private static string EscapeCenterHtml(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        return text
+            .Replace("&", "&amp;")
+            .Replace("<", "&lt;")
+            .Replace(">", "&gt;");
+    }
+
     private IMenu GetOrCreateBuiltinMainMenu()
     {
         if (_builtinMainMenu != null) return _builtinMainMenu;
 
         var builder = Core.Menu.CreateMenu("hlstatsx.main")
             .WithTitle("► HLstatsX:CE Stats")
-            .WithItemsPerPage(6);
+            .WithItemsPerPage(5);
 
         if (_config.AutoCloseMenuSeconds > 0)
             builder.WithAutoClose(TimeSpan.FromSeconds(_config.AutoCloseMenuSeconds));
@@ -1649,14 +1707,23 @@ public partial class HLStatsX : BasePlugin
             builder.Add(btn);
         }
 
-        AddCmdButton("My Rank",       "rank");
-        AddCmdButton("Top 10",        "top10");
-        AddCmdButton("Top 20",        "top20");
-        AddCmdButton("Next Above Me", "next");
-        AddCmdButton("My Session",    "session");
-        AddCmdButton("My Stats",      "statsme");
-        AddCmdButton("Weapon Stats",  "weapons");
-        AddCmdButton("Server List",   "servers");
+        AddCmdButton("My Rank (!rank)",          "rank");
+        AddCmdButton("Top 10 Players (!top10)",  "top10");
+        AddCmdButton("Top 20 Players (!top20)",  "top20");
+        AddCmdButton("Next Above Me (!next)",    "next");
+        AddCmdButton("Session Stats (!session)", "session");
+        AddCmdButton("My Stats (!statsme)",      "statsme");
+        AddCmdButton("Weapon Usage (!weapons)",  "weapons");
+        AddCmdButton("Weapon Accuracy (!accuracy)", "accuracy");
+        AddCmdButton("Hitgroup Targets (!targets)", "targets");
+        AddCmdButton("Top Victims (!kills)",     "kills");
+        AddCmdButton("Action Summary (!actions)", "actions");
+        AddCmdButton("Map Stats (!maps)",        "maps");
+        AddCmdButton("Top Clans (!clans)",       "clans");
+        AddCmdButton("Server List (!servers)",   "servers");
+        AddCmdButton("Server Status (!status)",  "status");
+        AddCmdButton("Toggle Ranking (!hlx_hideranking)", "hlx_hideranking");
+        AddCmdButton("Help & Commands (!help)",  "help");
 
         _builtinMainMenu = builder.Build();
         return _builtinMainMenu;
@@ -1712,16 +1779,31 @@ public partial class HLStatsX : BasePlugin
 
                 if (line.StartsWith("->", StringComparison.OrdinalIgnoreCase))
                 {
-                    line = line.Substring(2).Trim();
+                    var headerCandidate = line.Substring(2).Trim();
+                    int dashIdx = headerCandidate.IndexOf(" - ", StringComparison.Ordinal);
+                    if (dashIdx > 0 && dashIdx <= 3 && char.IsDigit(headerCandidate[0]))
+                    {
+                        headerCandidate = headerCandidate.Substring(dashIdx + 3).Trim();
+                    }
+
+                    if (optionLines.Count == 0 && title == "► HLstatsX:CE Stats")
+                    {
+                        title = $"► {EscapeCenterHtml(headerCandidate)}";
+                    }
+                    else
+                    {
+                        optionLines.Add($"── {EscapeCenterHtml(headerCandidate)} ──");
+                    }
+                    continue;
                 }
 
-                if (optionLines.Count == 0 && !char.IsDigit(line[0]))
+                if (optionLines.Count == 0 && !char.IsDigit(line[0]) && title == "► HLstatsX:CE Stats")
                 {
-                    title = line;
+                    title = $"► {EscapeCenterHtml(line)}";
                 }
                 else
                 {
-                    optionLines.Add(line);
+                    optionLines.Add(EscapeCenterHtml(line));
                 }
             }
 

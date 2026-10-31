@@ -16,7 +16,7 @@ namespace HLStatsX;
 
 [PluginMetadata(
     Id = "HLStatsX",
-    Version = "1.2.1",
+    Version = "1.2.2",
     Name = "HLStatsX:CE Ingame Plugin (SwiftlyS2)",
     Author = "SyntX34",
     Description = "Provides CS2 in-game interaction and messaging with HLstatsX:CE daemon"
@@ -37,6 +37,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
     private readonly Dictionary<int, CancellationTokenSource> _tsayTimers = new();
     private readonly Dictionary<int, (string Title, List<string> Lines, int Page)> _customHudStatsState = new();
     private readonly Dictionary<ulong, int> _playerStreak = new();
+    private readonly HashSet<int> _mapConnectedPlayers = new();
     private readonly HashSet<int> _mapAnnouncedPlayers = new();
     private readonly Dictionary<ulong, string> _playerClanTags = new();
 
@@ -50,7 +51,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
     private readonly HashSet<string> _interactingPlugins = new(StringComparer.OrdinalIgnoreCase);
 
     public event Action? OnHLStatsXLoaded;
-    public string PluginVersion => "1.2.1";
+    public string PluginVersion => "1.2.2";
 
     public HLStatsX(ISwiftlyCore core) : base(core)
     {
