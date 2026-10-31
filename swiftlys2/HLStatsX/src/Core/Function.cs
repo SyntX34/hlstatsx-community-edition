@@ -107,21 +107,6 @@ public partial class HLStatsX : BasePlugin
         public int rightleg;
     }
 
-    private static readonly (int Kills, string Name)[] StreakMilestones = new[]
-    {
-        (2, "Double Kill"),
-        (3, "Triple Kill"),
-        (4, "Domination"),
-        (5, "Rampage"),
-        (6, "Mega Kill"),
-        (7, "Ownage"),
-        (8, "Ultra Kill"),
-        (9, "Killing Spree"),
-        (10, "Monster Kill"),
-        (11, "Unstoppable"),
-        (12, "God Like")
-    };
-
     private static string GetSteamId3(ulong steamId64)
     {
         if (steamId64 == 0 || steamId64 < 76561197960265729UL) return "BOT";
@@ -281,7 +266,12 @@ public partial class HLStatsX : BasePlugin
         Core.GameEvent.HookPost<EventRoundEnd>((@event) =>
         {
             foreach (var player in Core.PlayerManager.GetAllValidPlayers())
+            {
                 FlushPlayerWeaponStats(player);
+                FlushPlayerKillStreak(player);
+            }
+            _playerStreak.Clear();
+            SendUdpLog("World triggered \"Round_End\"");
             return HookResult.Continue;
         });
 
@@ -374,7 +364,7 @@ public partial class HLStatsX : BasePlugin
 
         Core.GameEvent.HookPost<EventRoundStart>((@event) =>
         {
-            _playerStreak.Clear();
+            AnnounceCurrentMap();
             AnnounceCurrentMap();
             SendUdpLog("World triggered \"Round_Start\"");
             foreach (var player in Core.PlayerManager.GetAllValidPlayers())
@@ -579,7 +569,7 @@ public partial class HLStatsX : BasePlugin
             if (player == null || !player.IsValid) return HookResult.Continue;
             if (player.SteamID > 0)
             {
-                _playerStreak.Remove(player.SteamID);
+                FlushPlayerKillStreak(player);
                 _playerClanTags.Remove(player.SteamID);
             }
             _mapConnectedPlayers.Remove(player.PlayerID);
@@ -686,53 +676,12 @@ public partial class HLStatsX : BasePlugin
 
             if (victim != null && victim.IsValid)
             {
-                /* Reset streak for victim */
-                if (victim.SteamID > 0)
-                    _playerStreak[victim.SteamID] = 0;
+                FlushPlayerKillStreak(victim);
 
                 if (attacker != null && attacker.IsValid && attacker.UserID != victim.UserID)
                 {
                     string headshotProp = @event.Headshot ? " (headshot)" : "";
                     SendUdpLog($"{FormatPlayerString(attacker)} killed {FormatPlayerString(victim)} with \"{finalWeapon}\"{headshotProp}");
-
-                    /* Track attacker streak */
-                    if (attacker.SteamID > 0)
-                    {
-                        _playerStreak.TryGetValue(attacker.SteamID, out int curStreak);
-                        curStreak++;
-                        _playerStreak[attacker.SteamID] = curStreak;
-
-                        /* Check milestones */
-                        var matchedMilestone = StreakMilestones.FirstOrDefault(m => m.Kills == curStreak);
-                        if (matchedMilestone.Kills > 0)
-                        {
-                            SendUdpLog($"{FormatPlayerString(attacker)} triggered \"kill_streak_{curStreak}\"");
-                            if (curStreak >= 3)
-                            {
-                                string streakName = matchedMilestone.Name;
-                                int kills = curStreak;
-                                string attackerName = attacker.Name;
-                                foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
-                                {
-                                    var loc = Core.Translation.GetPlayerLocalizer(p);
-                                    string tmpl = loc["hlx.streak"] ?? "[red][HLstatsX][default] [green]{0}[default] is on a [green]{1}[default] streak ({2} kills)!";
-                                    p.SendMessage(MessageType.Chat, FormatColors(string.Format(tmpl, attackerName, streakName, kills)));
-                                }
-                            }
-                        }
-                        else if (curStreak > 12)
-                        {
-                            SendUdpLog($"{FormatPlayerString(attacker)} triggered \"kill_streak_12\"");
-                            int kills = curStreak;
-                            string attackerName = attacker.Name;
-                            foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
-                            {
-                                var loc = Core.Translation.GetPlayerLocalizer(p);
-                                string tmpl = loc["hlx.streak"] ?? "[red][HLstatsX][default] [green]{0}[default] is on a [green]{1}[default] streak ({2} kills)!";
-                                p.SendMessage(MessageType.Chat, FormatColors(string.Format(tmpl, attackerName, "God Like", kills)));
-                            }
-                        }
-                    }
                 }
                 else if (attacker == null || attacker.UserID == victim.UserID)
                 {
@@ -743,30 +692,10 @@ public partial class HLStatsX : BasePlugin
                     SendUdpLog($"{FormatPlayerString(@event.AssisterPlayer)} triggered \"assisted_kill\" against {FormatPlayerString(victim)}");
 
                 if (@event.Dominated > 0 && attacker != null && attacker.IsValid)
-                {
                     SendUdpLog($"{FormatPlayerString(attacker)} triggered \"domination\" against {FormatPlayerString(victim)}");
-                    string attackerName = attacker.Name;
-                    string victimName = victim.Name;
-                    foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
-                    {
-                        var loc = Core.Translation.GetPlayerLocalizer(p);
-                        string tmpl = loc["hlx.domination"] ?? "[red][HLstatsX][default] [green]{0}[default] is [green]DOMINATING[default] [green]{1}[default]!";
-                        p.SendMessage(MessageType.Chat, FormatColors(string.Format(tmpl, attackerName, victimName)));
-                    }
-                }
 
                 if (@event.Revenge > 0 && attacker != null && attacker.IsValid)
-                {
                     SendUdpLog($"{FormatPlayerString(attacker)} triggered \"revenge\" against {FormatPlayerString(victim)}");
-                    string attackerName = attacker.Name;
-                    string victimName = victim.Name;
-                    foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
-                    {
-                        var loc = Core.Translation.GetPlayerLocalizer(p);
-                        string tmpl = loc["hlx.revenge"] ?? "[red][HLstatsX][default] [green]{0}[default] got [green]REVENGE[default] on [green]{1}[default]!";
-                        p.SendMessage(MessageType.Chat, FormatColors(string.Format(tmpl, attackerName, victimName)));
-                    }
-                }
             }
 
             if (!string.IsNullOrEmpty(finalWeapon) && WeaponCode.ContainsKey(finalWeapon))
@@ -916,6 +845,20 @@ public partial class HLStatsX : BasePlugin
         {
             try { menu?.Dispose(); } catch { }
             _playerMenus.Remove(playerId);
+        }
+    }
+
+    private void FlushPlayerKillStreak(IPlayer player)
+    {
+        if (player == null || !player.IsValid || player.SteamID == 0) return;
+        if (!_playerStreak.TryGetValue(player.SteamID, out int curStreak) || curStreak <= 0)
+            return;
+
+        _playerStreak[player.SteamID] = 0;
+        if (curStreak > 1)
+        {
+            int streakId = curStreak > 12 ? 12 : curStreak;
+            SendUdpLog($"{FormatPlayerString(player)} triggered \"kill_streak_{streakId}\"");
         }
     }
 

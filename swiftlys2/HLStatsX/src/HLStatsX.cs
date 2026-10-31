@@ -16,7 +16,7 @@ namespace HLStatsX;
 
 [PluginMetadata(
     Id = "HLStatsX",
-    Version = "1.2.3",
+    Version = "1.2.4",
     Name = "HLStatsX:CE Ingame Plugin (SwiftlyS2)",
     Author = "SyntX34",
     Description = "Provides CS2 in-game interaction and messaging with HLstatsX:CE daemon"
@@ -53,7 +53,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
     private readonly HashSet<string> _interactingPlugins = new(StringComparer.OrdinalIgnoreCase);
 
     public event Action? OnHLStatsXLoaded;
-    public string PluginVersion => "1.2.3";
+    public string PluginVersion => "1.2.4";
 
     public HLStatsX(ISwiftlyCore core) : base(core)
     {
@@ -110,32 +110,12 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
     {
         if (attacker == null || !attacker.IsValid) return;
 
-        /* Reset victim streak */
-        if (victim != null && victim.IsValid && victim.SteamID > 0)
-            _playerStreak[victim.SteamID] = 0;
+        if (victim != null && victim.IsValid)
+            FlushPlayerKillStreak(victim);
 
-        if (attacker.SteamID == 0) return;
+        if (attacker.SteamID == 0 || attacker.IsFakeClient) return;
         _playerStreak.TryGetValue(attacker.SteamID, out int curStreak);
-        curStreak++;
-        _playerStreak[attacker.SteamID] = curStreak;
-
-        var matchedMilestone = StreakMilestones.FirstOrDefault(m => m.Kills == curStreak);
-        int streakId = matchedMilestone.Kills > 0 ? curStreak : (curStreak > 12 ? 12 : 0);
-        if (streakId > 0)
-        {
-            SendUdpLog($"{FormatPlayerString(attacker)} triggered \"kill_streak_{streakId}\"");
-            if (curStreak >= 3)
-            {
-                string streakName = matchedMilestone.Kills > 0 ? matchedMilestone.Name : "God Like";
-                string attackerName = attacker.Name;
-                foreach (var p in Core.PlayerManager.GetAllValidPlayers().Where(x => !x.IsFakeClient))
-                {
-                    var loc = Core.Translation.GetPlayerLocalizer(p);
-                    string tmpl = loc["hlx.streak"] ?? "[red][HLstatsX][default] [green]{0}[default] is on a [green]{1}[default] streak ({2} kills)!";
-                    p.SendMessage(MessageType.Chat, FormatColors(string.Format(tmpl, attackerName, streakName, curStreak)));
-                }
-            }
-        }
+        _playerStreak[attacker.SteamID] = curStreak + 1;
     }
 
     public override void ConfigureSharedInterface(IInterfaceManager interfaceManager)
