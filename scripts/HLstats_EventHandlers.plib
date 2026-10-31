@@ -120,7 +120,7 @@ sub get_next_ranks
 	my $result = &doQuery("
 		SELECT
 			$g_ranktype,
-			kills / IF(deaths=0,1,deaths) AS kpd
+			ROUND(kills / IF(deaths=0,1,deaths), 6) AS kpd
 		FROM
 			hlstats_Players
 		WHERE
@@ -133,8 +133,30 @@ sub get_next_ranks
 	if (!$base) {
 		$base = 0;
 	}
+	if (!defined($kpd) || $kpd eq "") {
+		$kpd = 0;
+	}
 
 	my $ranknumber = $player->getRank();
+	if (!$ranknumber || $ranknumber eq "") {
+		my $r_res = &doQuery("
+			SELECT
+				COUNT(*) + 1
+			FROM
+				hlstats_Players
+			WHERE
+				game='".&quoteSQL($player->{game})."'
+				AND hideranking = 0
+				AND kills >= 1
+				AND (
+					$g_ranktype > $base
+					OR ($g_ranktype = $base AND (kills / IF(deaths=0,1,deaths)) > $kpd)
+				)
+		");
+		($ranknumber) = $r_res->fetchrow_array;
+		$r_res->finish;
+		$ranknumber ||= 1;
+	}
 
 	my $rankword = "";
 	if ($g_ranktype eq "kills") {
@@ -156,25 +178,25 @@ sub get_next_ranks
 			AND hideranking = 0
 			AND kills >= 1
 			AND playerId <> " . $player->{playerid} . "
-		HAVING
-			kpd>=$kpd
-		ORDER BY $g_ranktype, kpd
+			AND (kills / IF(deaths=0,1,deaths)) >= $kpd
+		ORDER BY $g_ranktype ASC, kpd ASC
 		LIMIT 0,10
 	");
 
 	my $player_count = 0;   
 	my $i = $ranknumber;
-	while (($player_count < 11) && (my ($playerId, $lastName, $p_base, $kpd) = $result->fetchrow_array)) {
+	while (($player_count < 10) && (my ($playerId, $lastName, $p_base, $p_kpd) = $result->fetchrow_array)) {
 		$i--;
+		if ($i < 1) { $i = 1; }
 		if (length($lastName) > 20) {
 			$lastName = substr($lastName, 0, 17)."...";
 		}
 		$player_count++;
-		$osd_message .= sprintf("   %02d  %s%s  +%04d  %s", $i, &number_format($p_base), $rankword, &number_format($p_base-$base), $lastName)."\\n";
+		$osd_message .= sprintf("   %02d  %s%s  +%04d  %s", $i, &number_format($p_base), $rankword, ($p_base-$base), $lastName)."\\n";
 	}
 	$result->finish;
 
-	if ($player_count < 11)  {
+	if ($player_count < 10)  {
 		my $result = &doQuery("
 			SELECT
 				playerId,
@@ -189,13 +211,14 @@ sub get_next_ranks
 				AND $g_ranktype > $base
 				AND kills >= 1
 			ORDER BY
-				$g_ranktype,
-				kpd
+				$g_ranktype ASC,
+				kpd ASC
 			LIMIT 0,10
 		");
       
-		while (($player_count < 11) && (my ($playerId, $lastName, $p_base, $kpd) = $result->fetchrow_array)) {
+		while (($player_count < 10) && (my ($playerId, $lastName, $p_base, $p_kpd) = $result->fetchrow_array)) {
 			$i--;
+			if ($i < 1) { $i = 1; }
 			if (length($lastName) > 20) {
 				$lastName = substr($lastName, 0, 17)."...";
 			}
@@ -203,6 +226,10 @@ sub get_next_ranks
 			$player_count++;
 		}
 		$result->finish;
+	}
+
+	if ($player_count == 0) {
+		$osd_message .= "   You are #1 - no players ranked above you!\\n";
 	}
    
 	return ($ranknumber, $g_games{$player->{game}}->getTotalPlayers(), $osd_message);
@@ -2516,7 +2543,7 @@ sub doEvent_Chat
 			}
 			if ($g_servers{$s_addr}->{mod} eq "SWIFTLYS2" && $g_servers{$s_addr}->{player_command_osd} ne "") {
 				my $srv_name = $g_servers{$s_addr}->{name} || "CS2 Server";
-				my $srv_map  = $g_servers{$s_addr}->{map} || "unknown";
+				my $srv_map  = $g_servers{$s_addr}->get_map() || "unknown";
 				my $srv_act  = $g_servers{$s_addr}->{numplayers} || 0;
 				my $srv_max  = $g_servers{$s_addr}->{maxplayers} || 0;
 				my $srv_k    = &number_format($g_servers{$s_addr}->{total_kills} + $g_servers{$s_addr}->{kills});
@@ -2546,7 +2573,7 @@ sub doEvent_Chat
 		elsif ($message =~ /^\/?load$/i) {
 			if ($g_servers{$s_addr}->{mod} eq "SWIFTLYS2" && $g_servers{$s_addr}->{player_command_osd} ne "") {
 				my $srv_name = $g_servers{$s_addr}->{name} || "CS2 Server";
-				my $srv_map  = $g_servers{$s_addr}->{map} || "unknown";
+				my $srv_map  = $g_servers{$s_addr}->get_map() || "unknown";
 				my $srv_act  = $g_servers{$s_addr}->{numplayers} || 0;
 				my $srv_max  = $g_servers{$s_addr}->{maxplayers} || 0;
 				my $srv_min  = $g_servers{$s_addr}->{minplayers} || 0;

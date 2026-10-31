@@ -644,6 +644,18 @@ sub get_map
 	my ($self, $fromupdate) = @_;
 
 	if ($self->{mod} eq "SWIFTLYS2" || $self->{play_game} == CS2()) {
+		if ($self->{map} eq "") {
+			my $res = &::doQuery("SELECT act_map FROM hlstats_Servers WHERE serverId=" . int($self->{id}) . " LIMIT 1");
+			if ($res && $res->rows > 0) {
+				my ($db_map) = $res->fetchrow_array;
+				$res->finish;
+				if (defined($db_map) && $db_map ne "") {
+					$self->{map} = $db_map;
+				}
+			} elsif ($res) {
+				$res->finish;
+			}
+		}
 		return $self->{map};
 	}
 

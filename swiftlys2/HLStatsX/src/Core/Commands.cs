@@ -204,10 +204,8 @@ public partial class HLStatsX : BasePlugin
             {
                 if (!context.IsSentByPlayer || context.Sender is not { } player || !player.IsValid) return;
                 string arg = context.Args.Length > 0 ? " " + string.Join(" ", context.Args) : "";
-                SendLog(player, $"{name}{arg}", "say");
+                DispatchPlayerStatCommand(player, $"{name}{arg}", "say");
             }, registerRaw: true);
-            try { Core.Command.RegisterCommandAlias(name, $"!{name}"); } catch { }
-            try { Core.Command.RegisterCommandAlias(name, $"/{name}"); } catch { }
         }
 
         RegisterPlayerStatsCommand("rank");
@@ -265,8 +263,6 @@ public partial class HLStatsX : BasePlugin
                 if (!context.IsSentByPlayer || context.Sender is not { } player || !player.IsValid) return;
                 OpenStatsMenu(player);
             }, registerRaw: true);
-            try { Core.Command.RegisterCommandAlias(name, $"!{name}"); } catch { }
-            try { Core.Command.RegisterCommandAlias(name, $"/{name}"); } catch { }
         }
 
         RegisterMenuCommand("hlx");

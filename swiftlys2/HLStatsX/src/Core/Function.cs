@@ -264,7 +264,7 @@ public partial class HLStatsX : BasePlugin
                 if (IsStatCommand(cmd, cleaned))
                 {
                     string verb = teamOnly ? "say_team" : "say";
-                    SendLog(player, cleaned, verb);
+                    DispatchPlayerStatCommand(player, cleaned, verb);
                     if (_blockChatCommands || hasPrefix) return HookResult.Handled;
                     return HookResult.Continue;
                 }
@@ -375,6 +375,7 @@ public partial class HLStatsX : BasePlugin
         Core.GameEvent.HookPost<EventRoundStart>((@event) =>
         {
             _playerStreak.Clear();
+            AnnounceCurrentMap();
             SendUdpLog("World triggered \"Round_Start\"");
             foreach (var player in Core.PlayerManager.GetAllValidPlayers())
             {
@@ -817,28 +818,94 @@ public partial class HLStatsX : BasePlugin
         ClearAllMapState();
     }
 
+    private void DispatchPlayerStatCommand(IPlayer player, string commandText, string verb = "say")
+    {
+        if (player == null || !player.IsValid || string.IsNullOrWhiteSpace(commandText)) return;
+        int playerId = player.PlayerID;
+        long now = Environment.TickCount64;
+        string normalized = commandText.Trim();
+
+        if (_lastPlayerCommand.TryGetValue(playerId, out var prev) &&
+            prev.Command.Equals(normalized, StringComparison.OrdinalIgnoreCase) &&
+            now - prev.Tick >= 0 && now - prev.Tick < 250)
+        {
+            return;
+        }
+
+        _lastPlayerCommand[playerId] = (normalized, now);
+        SendLog(player, normalized, verb);
+    }
+
+    private string ResolveCurrentMapName(string? rawMap = null)
+    {
+        string candidate = rawMap ?? "";
+        if (string.IsNullOrWhiteSpace(candidate) || candidate.Equals("<empty>", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                candidate = Core.Engine.GlobalVars.MapName.ToString() ?? "";
+            }
+            catch
+            {
+                candidate = "";
+            }
+        }
+
+        candidate = candidate.Trim().Replace('\\', '/');
+        if (candidate.Equals("<empty>", StringComparison.OrdinalIgnoreCase))
+            candidate = "";
+
+        if (candidate.EndsWith(".vpk", StringComparison.OrdinalIgnoreCase))
+            candidate = candidate.Substring(0, candidate.Length - 4);
+
+        if (candidate.Contains('/'))
+            candidate = candidate.Substring(candidate.LastIndexOf('/') + 1);
+
+        if (string.IsNullOrWhiteSpace(candidate))
+        {
+            try
+            {
+                string workshopId = Core.Engine.WorkshopId?.Trim() ?? "";
+                if (!string.IsNullOrEmpty(workshopId))
+                    candidate = $"workshop_{workshopId}";
+            }
+            catch { }
+        }
+
+        if (!string.IsNullOrWhiteSpace(candidate))
+            _currentMapName = candidate;
+
+        return _currentMapName;
+    }
+
+    private void AnnounceCurrentMap(string? rawMap = null, bool logLoading = false)
+    {
+        string mapName = ResolveCurrentMapName(rawMap);
+        if (string.IsNullOrWhiteSpace(mapName)) return;
+
+        if (logLoading)
+            SendUdpLog($"Loading map \"{mapName}\"");
+        SendUdpLog($"Started map \"{mapName}\" (CRC \"-1\")");
+    }
+
     private void HandleMapLoad(IOnMapLoadEvent @event)
     {
         ClearAllMapState();
         RestartUdpConnection();
 
-        var rawMap = @event.MapName ?? "";
-        var mapName = rawMap.Contains('/')
-            ? rawMap.Substring(rawMap.LastIndexOf('/') + 1)
-            : rawMap;
-
         SendServerCvars();
-        SendUdpLog($"Loading map \"{mapName}\"");
-        SendUdpLog($"Started map \"{mapName}\" (CRC \"-1\")");
+        AnnounceCurrentMap(@event.MapName, logLoading: true);
 
         /* Re-announce players who remained connected across the map transition */
         AnnounceAllConnectedPlayers();
         Core.Scheduler.DelayBySeconds(2.0f, () =>
         {
+            AnnounceCurrentMap();
             AnnounceAllConnectedPlayers();
         });
         Core.Scheduler.DelayBySeconds(5.0f, () =>
         {
+            AnnounceCurrentMap();
             AnnounceAllConnectedPlayers();
         });
     }
@@ -861,6 +928,7 @@ public partial class HLStatsX : BasePlugin
         _mapConnectedPlayers.Clear();
         _mapAnnouncedPlayers.Clear();
         _customHudStatsState.Clear();
+        _lastPlayerCommand.Clear();
 
         foreach (var kvp in _playerMenus)
         {

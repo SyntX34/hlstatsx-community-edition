@@ -16,7 +16,7 @@ namespace HLStatsX;
 
 [PluginMetadata(
     Id = "HLStatsX",
-    Version = "1.2.2",
+    Version = "1.2.3",
     Name = "HLStatsX:CE Ingame Plugin (SwiftlyS2)",
     Author = "SyntX34",
     Description = "Provides CS2 in-game interaction and messaging with HLstatsX:CE daemon"
@@ -46,12 +46,14 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
     private string _messagePrefix = "";
     private string _webpageUrl = "";
     private string _hlxceVersion = "";
+    private string _currentMapName = "";
     private Guid _chatHookGuid = Guid.Empty;
+    private readonly Dictionary<int, (string Command, long Tick)> _lastPlayerCommand = new();
 
     private readonly HashSet<string> _interactingPlugins = new(StringComparer.OrdinalIgnoreCase);
 
     public event Action? OnHLStatsXLoaded;
-    public string PluginVersion => "1.2.2";
+    public string PluginVersion => "1.2.3";
 
     public HLStatsX(ISwiftlyCore core) : base(core)
     {
@@ -161,6 +163,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
         RegisterServerCommands();
         RegisterGameEvents();
         SendServerCvars();
+        AnnounceCurrentMap();
         AnnounceAllConnectedPlayers();
         Console.WriteLine($"[HLstatsX:CE] Loaded. Sending logs to {_config.DaemonHost}:{_config.DaemonPort} (Server: {_config.ServerIp}:{_config.ServerPort}, ReceiverPort: {_config.ReceiverPort}, MaxPlayers: {_config.MaxPlayers}, Debug: {_config.Debug})");
         Console.WriteLine($"[HLstatsX:CE] API 'HlStatsX.API' ready. Active plugins interacting: {_interactingPlugins.Count}");
