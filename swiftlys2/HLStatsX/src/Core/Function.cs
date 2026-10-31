@@ -1825,6 +1825,11 @@ public partial class HLStatsX : BasePlugin
             if (duration > 0)
                 builder.WithAutoClose(TimeSpan.FromSeconds(duration));
 
+            if (optionLines.Count == 1 && title.Contains("Next Players", StringComparison.OrdinalIgnoreCase))
+            {
+                optionLines.Add("You are #1 - no players ranked above you!");
+            }
+
             if (optionLines.Count == 0)
             {
                 builder.Add(new TextComponent(title) { Enabled = true });
@@ -1961,6 +1966,11 @@ public partial class HLStatsX : BasePlugin
                 {
                     optionLines.Add(line);
                 }
+            }
+
+            if (optionLines.Count == 1 && title.Contains("Next Players", StringComparison.OrdinalIgnoreCase))
+            {
+                optionLines.Add("You are #1 - no players ranked above you!");
             }
 
             RenderCustomHudStatsPage(player, hud, title, optionLines, 0);

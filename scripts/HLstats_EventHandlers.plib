@@ -117,21 +117,25 @@ sub get_next_ranks
 {
 	my ($player)  = @_;
 
+	my $rankcol = ($g_ranktype eq "kills") ? "kills" : "skill";
+	my $game    = $player->{game} || $g_servers{$s_addr}->{game} || "cs2";
+	my $pid     = int($player->{playerid} || 0);
+
 	my $result = &doQuery("
 		SELECT
-			$g_ranktype,
+			$rankcol,
 			ROUND(kills / IF(deaths=0,1,deaths), 6) AS kpd
 		FROM
 			hlstats_Players
 		WHERE
-			playerId=" . $player->{playerid}
+			playerId=" . $pid
 	);
 	my ($base, $kpd) = $result->fetchrow_array;
 	$result->finish;
 	my $playerName = $player->{name};
 
-	if (!$base) {
-		$base = 0;
+	if (!defined($base) || $base eq "") {
+		$base = ($rankcol eq "kills") ? ($player->{total_kills} || 0) : ($player->{skill} || 1000);
 	}
 	if (!defined($kpd) || $kpd eq "") {
 		$kpd = 0;
@@ -145,12 +149,12 @@ sub get_next_ranks
 			FROM
 				hlstats_Players
 			WHERE
-				game='".&quoteSQL($player->{game})."'
+				game='".&quoteSQL($game)."'
 				AND hideranking = 0
 				AND kills >= 1
 				AND (
-					$g_ranktype > $base
-					OR ($g_ranktype = $base AND (kills / IF(deaths=0,1,deaths)) > $kpd)
+					$rankcol > $base
+					OR ($rankcol = $base AND (kills / IF(deaths=0,1,deaths)) > $kpd)
 				)
 		");
 		($ranknumber) = $r_res->fetchrow_array;
@@ -159,7 +163,7 @@ sub get_next_ranks
 	}
 
 	my $rankword = "";
-	if ($g_ranktype eq "kills") {
+	if ($rankcol eq "kills") {
 		$rankword = " kills";
 	}
 	my $osd_message = "->1 - Next Players\\n".sprintf("   %02d  %s%s        -      %s", $ranknumber, &number_format($base), $rankword, $playerName)."\\n";
@@ -168,18 +172,18 @@ sub get_next_ranks
 		SELECT
 			playerId,
 			lastName,
-			$g_ranktype,
+			$rankcol,
 			kills / IF(deaths=0,1,deaths) AS kpd
 		FROM
 			hlstats_Players
 		WHERE
-			game='".&quoteSQL($player->{game})."'
-			AND $g_ranktype = $base
+			game='".&quoteSQL($game)."'
+			AND $rankcol = $base
 			AND hideranking = 0
 			AND kills >= 1
-			AND playerId <> " . $player->{playerid} . "
+			AND playerId <> " . $pid . "
 			AND (kills / IF(deaths=0,1,deaths)) >= $kpd
-		ORDER BY $g_ranktype ASC, kpd ASC
+		ORDER BY $rankcol ASC, kpd ASC
 		LIMIT 0,10
 	");
 
@@ -201,17 +205,17 @@ sub get_next_ranks
 			SELECT
 				playerId,
 				lastName,
-				$g_ranktype,
+				$rankcol,
 				kills / IF(deaths=0,1,deaths) AS kpd
 			FROM
 				hlstats_Players
 			WHERE
-				game='".&quoteSQL($player->{game})."' 
+				game='".&quoteSQL($game)."' 
 				AND hideranking = 0
-				AND $g_ranktype > $base
+				AND $rankcol > $base
 				AND kills >= 1
 			ORDER BY
-				$g_ranktype ASC,
+				$rankcol ASC,
 				kpd ASC
 			LIMIT 0,10
 		");
@@ -232,7 +236,8 @@ sub get_next_ranks
 		$osd_message .= "   You are #1 - no players ranked above you!\\n";
 	}
    
-	return ($ranknumber, $g_games{$player->{game}}->getTotalPlayers(), $osd_message);
+	my $total_players = defined($g_games{$game}) ? $g_games{$game}->getTotalPlayers() : 1;
+	return ($ranknumber, $total_players, $osd_message);
 }
 
 
@@ -2911,13 +2916,19 @@ sub doEvent_Chat
 		}
 
 		### Begin of next Addon
-		elsif ($message =~ /^\/?next$/i) {
+		elsif ($message =~ /^\/?next([ ][0-9]+)?$/i) {
+			my $playerName = $player->{name};
+			my ($ranknumber, $totalplayers, $osd_message) = get_next_ranks($player);
 			if ($g_servers{$s_addr}->{player_command_osd} ne "") {
-				my $playerName = $player->{name};
-				my ($ranknumber, $totalplayers, $osd_message) = get_next_ranks($player);
 				$osd_string = $g_servers{$s_addr}->quoteparam($osd_message);
 				$cmd_str    = sprintf("%s \"15\" %s %s", $g_servers{$s_addr}->{"player_command_osd"}, $p_userid, $osd_string);
 				$g_servers{$s_addr}->dorcon($cmd_str);
+			} else {
+				my $rcmd = $g_servers{$s_addr}->{player_command};
+				if ($rcmd ne "") {
+					$cmd_str = sprintf("%s %s %s", $rcmd, $p_userid, $g_servers{$s_addr}->quoteparam($osd_message));
+					$g_servers{$s_addr}->dorcon($cmd_str);
+				}
 			}
 		} 
 
@@ -2933,9 +2944,10 @@ sub doEvent_Chat
 				}
 			}
 			if ($g_servers{$s_addr}->{player_command_osd} ne "") {
+				my $rankcol = ($g_ranktype eq "kills") ? "kills" : "skill";
 				my $result = &doQuery("
 					SELECT
-						$g_ranktype, lastName, 
+						$rankcol, lastName, 
 						kills / IF(deaths=0,1,deaths) AS kpd
 					FROM
 						hlstats_Players
@@ -2944,7 +2956,7 @@ sub doEvent_Chat
 						AND hideranking = 0        
 						AND kills >= 1
 					ORDER BY
-						$g_ranktype DESC, kpd DESC
+						$rankcol DESC, kpd DESC
 					LIMIT 0, ".$limit);
 					
 				my $rankword = "";
