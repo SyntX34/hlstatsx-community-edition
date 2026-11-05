@@ -1068,7 +1068,7 @@ public partial class HLStatsX : BasePlugin
         _playerClanTags.Clear();
         _mapConnectedPlayers.Clear();
         _mapAnnouncedPlayers.Clear();
-        _customHudStatsState.Clear();
+        _customMenuState.Clear();
         _lastPlayerCommand.Clear();
 
         foreach (var kvp in _playerMenus)
@@ -1514,8 +1514,7 @@ public partial class HLStatsX : BasePlugin
     {
         if (string.IsNullOrWhiteSpace(message)) return;
 
-        bool isCustomHud = _config.MenuType.Equals("2", StringComparison.OrdinalIgnoreCase) ||
-                           _config.MenuType.Equals("CustomHud", StringComparison.OrdinalIgnoreCase);
+        bool isCustomHud = _config.MenuType >= 2 && _config.MenuType <= 4;
 
         if (!isCustomHud)
         {
@@ -1591,8 +1590,7 @@ public partial class HLStatsX : BasePlugin
     {
         if (string.IsNullOrWhiteSpace(message)) return;
 
-        bool isCustomHud = _config.MenuType.Equals("2", StringComparison.OrdinalIgnoreCase) ||
-                           _config.MenuType.Equals("CustomHud", StringComparison.OrdinalIgnoreCase);
+        bool isCustomHud = _config.MenuType >= 2 && _config.MenuType <= 4;
 
         if (!isCustomHud)
         {
@@ -1669,7 +1667,7 @@ public partial class HLStatsX : BasePlugin
         {
             CancelMenuAutoClose(playerId);
             _activeHudPlayers.Remove(playerId);
-            _customHudStatsState.Remove(playerId);
+            _customMenuState.Remove(playerId);
             if (_playerHuds.TryGetValue(playerId, out var hud))
             {
                 if (hud != null && hud.IsValid)
@@ -1700,494 +1698,26 @@ public partial class HLStatsX : BasePlugin
 
         ScheduleMenuAutoClose(player);
 
-        bool isCustomHud = _config.MenuType.Equals("2", StringComparison.OrdinalIgnoreCase) ||
-                           _config.MenuType.Equals("CustomHud", StringComparison.OrdinalIgnoreCase);
-
-        if (isCustomHud)
+        if (_config.MenuType >= 2 && _config.MenuType <= 4)
         {
-            OpenCustomHudMenu(player);
+            OpenCustomMenuMain(player);
             return;
         }
 
         OpenBuiltinMenu(player);
     }
 
-    private CCSCustomHudLayout EnsureCustomHud(int playerId)
-    {
-        if (_playerHuds.TryGetValue(playerId, out var existing) && existing != null && existing.IsValid)
-        {
-            existing.SetTransmitState(true, playerId);
-            return existing;
-        }
-
-        var hud = Core.EntitySystem.CreateEntity<CCSCustomHudLayout>();
-        hud.StrLayout = _config.CustomMenuLayout;
-        hud.StrLayoutUpdated();
-        hud.DispatchSpawn();
-        hud.SetTransmitState(false);
-        hud.SetTransmitState(true, playerId);
-        _playerHuds[playerId] = hud;
-        return hud;
-    }
-
-    private void OpenCustomHudMenu(IPlayer player)
-    {
-        try
-        {
-            int playerId = player.PlayerID;
-            var hud = EnsureCustomHud(playerId);
-
-            var loc = Core.Translation.GetPlayerLocalizer(player);
-            string title = loc["hlx.menu_title"] ?? "► HLstatsX:CE Stats";
-
-            hud.SetDialogVariableString("HlxMenuTitle", "menu_title", title);
-            hud.SetDialogVariableString("HlxMenuOption01Label", "option_01", "1. My Rank");
-            hud.SetDialogVariableString("HlxMenuOption02Label", "option_02", "2. Top 10");
-            hud.SetDialogVariableString("HlxMenuOption03Label", "option_03", "3. Top 20");
-            hud.SetDialogVariableString("HlxMenuOption04Label", "option_04", "4. Next Above Me");
-            hud.SetDialogVariableString("HlxMenuOption05Label", "option_05", "5. My Session");
-            hud.SetDialogVariableString("HlxMenuOption06Label", "option_06", "6. My Stats");
-            hud.SetDialogVariableString("HlxMenuOption07Label", "option_07", "7. Weapon Stats");
-
-            hud.SetDialogVariableString("HlxMenuBackLabel", "back_text", "7. Back");
-            hud.SetDialogVariableString("HlxMenuNextLabel", "next_text", "8. Next");
-            hud.SetDialogVariableString("HlxMenuExitLabel", "exit_text", "9. Exit");
-
-            SetHudClass(hud, "HlxMenuBack", "Hidden", true);
-            SetHudClass(hud, "HlxMenuNext", "Hidden", true);
-            SetHudClass(hud, "HlxMenuExit", "Hidden", false);
-
-            for (int i = 1; i <= 7; i++)
-            {
-                string key = $"HlxMenuOption{i:D2}";
-                SetHudClass(hud, key, "Hidden", false);
-                SetHudClass(hud, key, "Interactive", true);
-            }
-            for (int i = 8; i <= 10; i++)
-            {
-                string key = $"HlxMenuOption{i:D2}";
-                SetHudClass(hud, key, "Hidden", true);
-                SetHudClass(hud, key, "Interactive", false);
-            }
-
-            SetHudClass(hud, "HlxMenuExit", "Interactive", true);
-
-            hud.SetInputCaptureEnabledForPlayer(playerId, true);
-            SetHudClass(hud, "HlxMenuPanel", "Visible", true);
-            _activeHudPlayers.Add(playerId);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[HLstatsX:CE] CustomHud menu error: {ex.Message}. Falling back to BuiltIn menu.");
-            OpenBuiltinMenu(player);
-        }
-    }
-
-    private void HandleCustomHudClick(IOnCustomHudClickedEvent @event)
-    {
-        try
-        {
-            int playerId = @event.PlayerId;
-
-            /* Prefer HUD dict match; _activeHudPlayers is advisory only */
-            CCSCustomHudLayout? hud = null;
-            if (!_playerHuds.TryGetValue(playerId, out hud) || hud == null || !hud.IsValid)
-            {
-                /* Fallback: match by CustomHudLayout entity */
-                var evtHud = @event.CustomHudLayout;
-                if (evtHud != null)
-                {
-                    var found = _playerHuds.FirstOrDefault(kv => kv.Value != null && kv.Value.IsValid && kv.Value == evtHud);
-                    if (found.Value != null) { playerId = found.Key; hud = found.Value; }
-                    else return;
-                }
-                else return;
-            }
-
-            var player = Core.PlayerManager.GetPlayer(playerId);
-            if (player == null || !player.IsValid) return;
-
-            string button = @event.ButtonId ?? "";
-            if (string.IsNullOrEmpty(button)) return;
-
-            /* Stats display pagination mode */
-            if (_customHudStatsState.TryGetValue(playerId, out var state))
-            {
-                int totalPages = Math.Max(1, (int)Math.Ceiling(state.Lines.Count / 10.0));
-                if (button == "HlxMenuBack")
-                {
-                    if (state.Page > 0)
-                        Core.Scheduler.NextTick(() => RenderCustomHudStatsPage(player, hud, state.Title, state.Lines, state.Page - 1));
-                    else
-                    {
-                        _customHudStatsState.Remove(playerId);
-                        Core.Scheduler.NextTick(() => OpenCustomHudMenu(player));
-                    }
-                    return;
-                }
-                if (button == "HlxMenuNext")
-                {
-                    if (state.Page + 1 < totalPages)
-                        Core.Scheduler.NextTick(() => RenderCustomHudStatsPage(player, hud, state.Title, state.Lines, state.Page + 1));
-                    return;
-                }
-                if (button == "HlxMenuExit")
-                {
-                    _customHudStatsState.Remove(playerId);
-                    Core.Scheduler.NextTick(() => CloseCustomHud(playerId));
-                    return;
-                }
-                return;
-            }
-
-            /* Main menu: dispatch on NextTick (server thread requirement) */
-            switch (button)
-            {
-                case "HlxMenuOption01":
-                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); DispatchPlayerStatCommand(player, "rank", "say"); });
-                    break;
-                case "HlxMenuOption02":
-                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); DispatchPlayerStatCommand(player, "top10", "say"); });
-                    break;
-                case "HlxMenuOption03":
-                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); DispatchPlayerStatCommand(player, "top20", "say"); });
-                    break;
-                case "HlxMenuOption04":
-                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); DispatchPlayerStatCommand(player, "next", "say"); });
-                    break;
-                case "HlxMenuOption05":
-                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); DispatchPlayerStatCommand(player, "session", "say"); });
-                    break;
-                case "HlxMenuOption06":
-                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); DispatchPlayerStatCommand(player, "statsme", "say"); });
-                    break;
-                case "HlxMenuOption07":
-                    Core.Scheduler.NextTick(() => { CloseCustomHud(playerId); DispatchPlayerStatCommand(player, "weapons", "say"); });
-                    break;
-                case "HlxMenuExit":
-                    Core.Scheduler.NextTick(() => CloseCustomHud(playerId));
-                    break;
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[HLstatsX:CE] HandleCustomHudClick error: {ex.Message}");
-        }
-    }
-
-    private static string EscapeCenterHtml(string text)
-    {
-        if (string.IsNullOrEmpty(text)) return "";
-        return text
-            .Replace("&", "&amp;")
-            .Replace("<", "&lt;")
-            .Replace(">", "&gt;");
-    }
-
-    private IMenu GetOrCreateBuiltinMainMenu()
-    {
-        if (_builtinMainMenu != null) return _builtinMainMenu;
-
-        var builder = Core.Menu.CreateMenu("hlstatsx.main")
-            .WithTitle("► HLstatsX:CE Stats")
-            .WithItemsPerPage(5);
-
-        if (_config.AutoCloseMenuSeconds > 0)
-            builder.WithAutoClose(TimeSpan.FromSeconds(_config.AutoCloseMenuSeconds));
-
-        void AddCmdButton(string label, string cmd)
-        {
-            var btn = new ButtonComponent(label, ctx =>
-            {
-                var p = ctx.Player;
-                if (p != null && p.IsValid)
-                {
-                    Core.Scheduler.NextTick(() =>
-                    {
-                        CancelMenuAutoClose(p.PlayerID);
-                        DispatchPlayerStatCommand(p, cmd, "say");
-                    });
-                }
-                return ValueTask.CompletedTask;
-            })
-            {
-                CloseOnSelect = true
-            };
-            builder.Add(btn);
-        }
-
-        AddCmdButton("My Rank (!rank)",          "rank");
-        AddCmdButton("Top 10 Players (!top10)",  "top10");
-        AddCmdButton("Top 20 Players (!top20)",  "top20");
-        AddCmdButton("Next Above Me (!next)",    "next");
-        AddCmdButton("Session Stats (!session)", "session");
-        AddCmdButton("My Stats (!statsme)",      "statsme");
-        AddCmdButton("Weapon Usage (!weapons)",  "weapons");
-        AddCmdButton("Weapon Accuracy (!accuracy)", "accuracy");
-        AddCmdButton("Hitgroup Targets (!targets)", "targets");
-        AddCmdButton("Top Victims (!kills)",     "kills");
-        AddCmdButton("Action Summary (!actions)", "actions");
-        AddCmdButton("Map Stats (!maps)",        "maps");
-        AddCmdButton("Top Clans (!clans)",       "clans");
-        AddCmdButton("Server List (!servers)",   "servers");
-        AddCmdButton("Server Status (!status)",  "status");
-        AddCmdButton("Toggle Ranking (!hlx_hideranking)", "hlx_hideranking");
-        AddCmdButton("Help & Commands (!help)",  "help");
-
-        _builtinMainMenu = builder.Build();
-        return _builtinMainMenu;
-    }
-
-    private void OpenBuiltinMenu(IPlayer player)
-    {
-        try
-        {
-            DisposePlayerMenu(player.PlayerID);
-            var menu = GetOrCreateBuiltinMainMenu();
-            menu.Open(player);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[HLstatsX:CE] Menu error: {ex.Message}");
-            player.SendMessage(MessageType.Chat,
-                FormatColors("[gold][HLstatsX:CE][default] Commands: [green]!rank  !top10  !session  !statsme  !next  !weapons"));
-        }
-    }
-
     private void DisplayDaemonStatsMenu(IPlayer player, string rawMessage, int duration = 15)
     {
         if (player == null || !player.IsValid) return;
 
-        bool isCustomHud = _config.MenuType.Equals("2", StringComparison.OrdinalIgnoreCase) ||
-                           _config.MenuType.Equals("CustomHud", StringComparison.OrdinalIgnoreCase);
-
-        if (isCustomHud)
+        if (_config.MenuType >= 2 && _config.MenuType <= 4)
         {
-            DisplayCustomHudStats(player, rawMessage, duration);
+            DisplayCustomStatsMenu(player, rawMessage, duration);
             return;
         }
 
         DisplayBuiltinStatsMenu(player, rawMessage, duration);
-    }
-
-    private void DisplayBuiltinStatsMenu(IPlayer player, string rawMessage, int duration = 15)
-    {
-        try
-        {
-            int playerId = player.PlayerID;
-            DisposePlayerMenu(playerId);
-
-            var rawLines = rawMessage.Replace("\r\n", "\n").Split('\n');
-            string title = "► HLstatsX:CE Stats";
-            var optionLines = new List<string>();
-
-            foreach (var rawLine in rawLines)
-            {
-                var line = rawLine.Trim();
-                if (string.IsNullOrEmpty(line)) continue;
-
-                if (line.StartsWith("->", StringComparison.OrdinalIgnoreCase))
-                {
-                    var headerCandidate = line.Substring(2).Trim();
-                    int dashIdx = headerCandidate.IndexOf(" - ", StringComparison.Ordinal);
-                    if (dashIdx > 0 && dashIdx <= 3 && char.IsDigit(headerCandidate[0]))
-                    {
-                        headerCandidate = headerCandidate.Substring(dashIdx + 3).Trim();
-                    }
-
-                    if (optionLines.Count == 0 && title == "► HLstatsX:CE Stats")
-                    {
-                        title = $"► {EscapeCenterHtml(headerCandidate)}";
-                    }
-                    else
-                    {
-                        optionLines.Add($"── {EscapeCenterHtml(headerCandidate)} ──");
-                    }
-                    continue;
-                }
-
-                if (optionLines.Count == 0 && !char.IsDigit(line[0]) && title == "► HLstatsX:CE Stats")
-                {
-                    title = $"► {EscapeCenterHtml(line)}";
-                }
-                else
-                {
-                    optionLines.Add(EscapeCenterHtml(line));
-                }
-            }
-
-            var builder = Core.Menu.CreateMenu($"hlstatsx.stats.{playerId}")
-                .WithTitle(title)
-                .WithItemsPerPage(5);
-
-            if (duration > 0)
-                builder.WithAutoClose(TimeSpan.FromSeconds(duration));
-
-            if (optionLines.Count == 1 && title.Contains("Next Players", StringComparison.OrdinalIgnoreCase))
-            {
-                optionLines.Add("You are #1 - no players ranked above you!");
-            }
-
-            if (optionLines.Count == 0)
-            {
-                builder.Add(new TextComponent(title) { Enabled = true });
-            }
-            else
-            {
-                foreach (var opt in optionLines)
-                {
-                    builder.Add(new TextComponent(opt) { Enabled = true });
-                }
-            }
-
-            /* Navigation: Return to Main Menu */
-            var backBtn = new ButtonComponent("« Main Menu", ctx =>
-            {
-                var p = ctx.Player;
-                if (p != null && p.IsValid)
-                {
-                    Core.Scheduler.NextTick(() =>
-                    {
-                        CancelMenuAutoClose(p.PlayerID);
-                        OpenStatsMenu(p);
-                    });
-                }
-                return ValueTask.CompletedTask;
-            })
-            {
-                CloseOnSelect = true
-            };
-            builder.Add(backBtn);
-
-            var menu = builder.Build();
-            _playerMenus[playerId] = menu;
-            menu.Open(player);
-
-            if (duration > 0)
-            {
-                CancelMenuAutoClose(playerId);
-                var cts = Core.Scheduler.DelayBySeconds(duration, () =>
-                {
-                    try { Core.Menu.CloseFor(player); } catch { }
-                    DisposePlayerMenu(playerId);
-                    _menuCloseTimers.Remove(playerId);
-                });
-                _menuCloseTimers[playerId] = cts;
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[HLstatsX:CE] DisplayBuiltinStatsMenu error: {ex.Message}");
-            SendChatMessage(player, rawMessage);
-        }
-    }
-
-    private void RenderCustomHudStatsPage(IPlayer player, CCSCustomHudLayout hud, string title, List<string> lines, int page)
-    {
-        int playerId = player.PlayerID;
-        int totalPages = Math.Max(1, (int)Math.Ceiling(lines.Count / 10.0));
-        if (page < 0) page = 0;
-        if (page >= totalPages) page = totalPages - 1;
-
-        _customHudStatsState[playerId] = (title, lines, page);
-
-        string pageTitle = totalPages > 1 ? $"{title} ({page + 1}/{totalPages})" : title;
-        hud.SetDialogVariableString("HlxMenuTitle", "menu_title", pageTitle);
-
-        int startIndex = page * 10;
-        for (int i = 1; i <= 10; i++)
-        {
-            string key = $"HlxMenuOption{i:D2}";
-            string labelKey = $"HlxMenuOption{i:D2}Label";
-            string varName = $"option_{i:D2}";
-            int itemIndex = startIndex + (i - 1);
-
-            if (itemIndex < lines.Count)
-            {
-                hud.SetDialogVariableString(labelKey, varName, lines[itemIndex]);
-                SetHudClass(hud, key, "Hidden", false);
-                SetHudClass(hud, key, "Interactive", false);
-            }
-            else
-            {
-                hud.SetDialogVariableString(labelKey, varName, "");
-                SetHudClass(hud, key, "Hidden", true);
-                SetHudClass(hud, key, "Interactive", false);
-            }
-        }
-
-        hud.SetDialogVariableString("HlxMenuBackLabel", "back_text", page > 0 ? "7. Prev" : "7. Menu");
-        hud.SetDialogVariableString("HlxMenuNextLabel", "next_text", "8. Next");
-        hud.SetDialogVariableString("HlxMenuExitLabel", "exit_text", "9. Exit");
-
-        SetHudClass(hud, "HlxMenuBack", "Hidden", false);
-        SetHudClass(hud, "HlxMenuBack", "Interactive", true);
-
-        bool hasNext = page + 1 < totalPages;
-        SetHudClass(hud, "HlxMenuNext", "Hidden", !hasNext);
-        SetHudClass(hud, "HlxMenuNext", "Interactive", hasNext);
-
-        SetHudClass(hud, "HlxMenuExit", "Hidden", false);
-        SetHudClass(hud, "HlxMenuExit", "Interactive", true);
-
-        hud.SetInputCaptureEnabledForPlayer(playerId, true);
-        SetHudClass(hud, "HlxMenuPanel", "Visible", true);
-        _activeHudPlayers.Add(playerId);
-    }
-
-    private void DisplayCustomHudStats(IPlayer player, string rawMessage, int duration = 15)
-    {
-        try
-        {
-            int playerId = player.PlayerID;
-            var hud = EnsureCustomHud(playerId);
-
-            var rawLines = rawMessage.Replace("\r\n", "\n").Split('\n');
-            string title = "► HLstatsX:CE Stats";
-            var optionLines = new List<string>();
-
-            foreach (var rawLine in rawLines)
-            {
-                var line = rawLine.Trim();
-                if (string.IsNullOrEmpty(line)) continue;
-
-                if (line.StartsWith("->", StringComparison.OrdinalIgnoreCase))
-                {
-                    line = line.Substring(2).Trim();
-                }
-
-                if (optionLines.Count == 0 && !char.IsDigit(line[0]))
-                {
-                    title = line;
-                }
-                else
-                {
-                    optionLines.Add(line);
-                }
-            }
-
-            if (optionLines.Count == 1 && title.Contains("Next Players", StringComparison.OrdinalIgnoreCase))
-            {
-                optionLines.Add("You are #1 - no players ranked above you!");
-            }
-
-            RenderCustomHudStatsPage(player, hud, title, optionLines, 0);
-
-            CancelMenuAutoClose(playerId);
-            if (duration > 0)
-            {
-                var cts = Core.Scheduler.DelayBySeconds(duration, () =>
-                {
-                    CloseCustomHud(playerId);
-                });
-                _menuCloseTimers[playerId] = cts;
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[HLstatsX:CE] DisplayCustomHudStats error: {ex.Message}. Falling back to BuiltIn menu.");
-            DisplayBuiltinStatsMenu(player, rawMessage, duration);
-        }
     }
 }
 

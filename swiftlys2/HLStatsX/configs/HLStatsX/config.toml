@@ -27,9 +27,11 @@ MaxPlayers = 32
 ReceiverPort = 27016
 
 # Menu rendering style for !hlx / !menu / !hlstatsx:
-# "1" or "BuiltIn"   = SwiftlyS2 Built-In Center Menu
-# "2" or "CustomHud" = Custom Panorama XML HUD (requires Metamod CustomHud addon + resource precache)
-MenuType = "1"
+# 1 = SwiftlyS2 Built-In Center Menu
+# 2 = Custom Panorama Keypress Menu (1-6 options, 7 prev, 8 next, 9 exit)
+# 3 = Custom Panorama Clickable Menu (Interactive mouse clicks)
+# 4 = Custom Panorama Scrollable Menu (W/S to navigate, E to select, R to exit)
+MenuType = 1
 
 # Seconds before an open HLstatsX menu automatically closes (0 = disable auto-close)
 AutoCloseMenuSeconds = 15

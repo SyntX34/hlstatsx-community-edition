@@ -17,7 +17,7 @@ public partial class HLStatsX : BasePlugin
         public string ProxyKey { get; set; } = "";
         public int MaxPlayers { get; set; } = 32;
         public int ReceiverPort { get; set; } = 27016;
-        public string MenuType { get; set; } = "BuiltIn";
+        public int MenuType { get; set; } = 1;
         public string CustomMenuLayout { get; set; } = "panorama/layout/custom_game/hlx_menu.xml";
         public string CustomCsayLayout { get; set; } = "panorama/layout/custom_game/hlx_csay.xml";
         public string CustomTsayLayout { get; set; } = "panorama/layout/custom_game/hlx_tsay.xml";
@@ -131,7 +131,14 @@ public partial class HLStatsX : BasePlugin
                     else if (key.Equals("ProxyKey", StringComparison.OrdinalIgnoreCase)) _config.ProxyKey = val;
                     else if (key.Equals("MaxPlayers", StringComparison.OrdinalIgnoreCase) && int.TryParse(val, out int mp)) _config.MaxPlayers = mp;
                     else if (key.Equals("ReceiverPort", StringComparison.OrdinalIgnoreCase) && int.TryParse(val, out int rp)) _config.ReceiverPort = rp;
-                    else if (key.Equals("MenuType", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(val)) _config.MenuType = val;
+                    else if (key.Equals("MenuType", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (int.TryParse(val, out int mt)) _config.MenuType = mt;
+                        else if (val.Equals("BuiltIn", StringComparison.OrdinalIgnoreCase)) _config.MenuType = 1;
+                        else if (val.Equals("CustomHud", StringComparison.OrdinalIgnoreCase) || val.Equals("KeyPress", StringComparison.OrdinalIgnoreCase)) _config.MenuType = 2;
+                        else if (val.Equals("Clickable", StringComparison.OrdinalIgnoreCase)) _config.MenuType = 3;
+                        else if (val.Equals("Scrollable", StringComparison.OrdinalIgnoreCase)) _config.MenuType = 4;
+                    }
                     else if (key.Equals("CustomMenuLayout", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(val)) _config.CustomMenuLayout = val;
                     else if (key.Equals("CustomCsayLayout", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(val)) _config.CustomCsayLayout = val;
                     else if (key.Equals("CustomTsayLayout", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(val)) _config.CustomTsayLayout = val;

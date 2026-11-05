@@ -16,7 +16,7 @@ namespace HLStatsX;
 
 [PluginMetadata(
     Id = "HLStatsX",
-    Version = "1.2.7",
+    Version = "1.2.8",
     Name = "HLStatsX:CE Ingame Plugin (SwiftlyS2)",
     Author = "SyntX34",
     Description = "Provides CS2 in-game interaction and messaging with HLstatsX:CE daemon"
@@ -35,7 +35,6 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
     private readonly Dictionary<int, CancellationTokenSource> _csayTimers = new();
     private readonly Dictionary<int, CCSCustomHudLayout> _tsayHuds = new();
     private readonly Dictionary<int, CancellationTokenSource> _tsayTimers = new();
-    private readonly Dictionary<int, (string Title, List<string> Lines, int Page)> _customHudStatsState = new();
     private readonly Dictionary<ulong, int> _playerStreak = new();
     private readonly HashSet<int> _mapConnectedPlayers = new();
     private readonly HashSet<int> _mapAnnouncedPlayers = new();
@@ -143,6 +142,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
         EnsureUdpConnection();
         RegisterServerCommands();
         RegisterGameEvents();
+        RegisterCustomMenuHandlers();
         SendServerCvars();
         AnnounceCurrentMap();
         AnnounceAllConnectedPlayers();
@@ -158,6 +158,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
 
     public override void Unload()
     {
+        UnregisterCustomMenuHandlers();
         UnregisterGameEvents();
         ClearAllMapState();
         StopUdpConnection();
