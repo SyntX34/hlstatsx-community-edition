@@ -2099,7 +2099,7 @@ sub doEvent_Chat
 				($cmd =~ /^\/?m249$/i)  || ($cmd =~ /^\/?hegrenade$/i) || ($cmd =~ /^\/?flashbang$/i) || ($cmd =~ /^\/?elite$/i)   ||
 				($cmd =~ /^\/?aug$/i)   || ($cmd =~ /^\/?mac10$/i)     || ($cmd =~ /^\/?fiveseven$/i) || ($cmd =~ /^\/?ump45$/i)   ||
 				($cmd =~ /^\/?sg550$/i) || ($cmd =~ /^\/?famas$/i)     || ($cmd =~ /^\/?galil$/i) ||
-				($cmd =~ /^\/?maps$/i) || ($cmd =~ /^\/?map_stats$/i) || ($cmd =~ /^\/?map$/i) ||
+				($cmd =~ /^\/?maps$/i) || ($cmd =~ /^\/?map_stats$/i) || ($cmd =~ /^\/?mapstats$/i) || ($cmd =~ /^\/?hlx_maps$/i) || ($cmd =~ /^\/?map$/i) ||
 				($cmd =~ /^\/?kill$/i) || ($cmd =~ /^\/?kills$/i) || ($cmd =~ /^\/?player_kills$/i) ||
 				($cmd =~ /^\/?weapon$/i) || ($cmd =~ /^\/?weapons$/i) || ($cmd =~ /^\/?weapon_usage$/i) ||
 				($cmd =~ /^\/?action$/i) || ($cmd =~ /^\/?actions$/i) || ($cmd =~ /^\/?hlx_menu$/i) ||
@@ -2244,7 +2244,7 @@ sub doEvent_Chat
 					($cmd =~ /^\/?m249$/i)  || ($cmd =~ /^\/?hegrenade$/i) || ($cmd =~ /^\/?flashbang$/i) || ($cmd =~ /^\/?elite$/i)   ||
 					($cmd =~ /^\/?aug$/i)   || ($cmd =~ /^\/?mac10$/i)     || ($cmd =~ /^\/?fiveseven$/i) || ($cmd =~ /^\/?ump45$/i)   ||
 					($cmd =~ /^\/?sg550$/i) || ($cmd =~ /^\/?famas$/i)     || ($cmd =~ /^\/?galil$/i) ||
-					($cmd =~ /^\/?maps$/i) || ($cmd =~ /^\/?map_stats$/i) || ($cmd =~ /^\/?map$/i) ||
+					($cmd =~ /^\/?maps$/i) || ($cmd =~ /^\/?map_stats$/i) || ($cmd =~ /^\/?mapstats$/i) || ($cmd =~ /^\/?hlx_maps$/i) || ($cmd =~ /^\/?map$/i) ||
 					($cmd =~ /^\/?kill$/i) || ($cmd =~ /^\/?kills$/i) || ($cmd =~ /^\/?player_kills$/i) ||
 					($cmd =~ /^\/?weapon$/i) || ($cmd =~ /^\/?weapons$/i) || ($cmd =~ /^\/?weapon_usage$/i) ||
 					($cmd =~ /^\/?action$/i) || ($cmd =~ /^\/?actions$/i)) {
@@ -3167,7 +3167,7 @@ sub doEvent_Chat
 		### End of Player-Kills Addon
 
 		### Begin Player-Map Performance Addon
-		elsif (($message =~ /^\/?maps$/i) || ($message =~ /^\/?map_stats$/i) || ($message =~ /^\/?map$/i)) {
+		elsif (($message =~ /^\/?maps$/i) || ($message =~ /^\/?map_stats$/i) || ($message =~ /^\/?mapstats$/i) || ($message =~ /^\/?hlx_maps$/i) || ($message =~ /^\/?map$/i)) {
 			if ($g_servers{$s_addr}->{mod} eq "SWIFTLYS2" && $g_servers{$s_addr}->{player_command_osd} ne "") {
 				my $p_playerid = $player->{playerid};
 				my $result = &doQuery("

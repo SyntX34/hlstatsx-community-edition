@@ -62,7 +62,7 @@ public partial class HLStatsX : BasePlugin
         AddCmdButton("Hitgroup Targets (!targets)", "targets");
         AddCmdButton("Top Victims (!kills)",     "kills");
         AddCmdButton("Action Summary (!actions)", "actions");
-        AddCmdButton("Map Stats (!maps)",        "maps");
+        AddCmdButton("Map Stats (!mapstats)",    "maps");
         AddCmdButton("Top Clans (!clans)",       "clans");
         AddCmdButton("Server List (!servers)",   "servers");
         AddCmdButton("Server Status (!status)",  "status");

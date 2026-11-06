@@ -15,7 +15,7 @@ public partial class HLStatsX : BasePlugin
         "kpd", "kdratio", "kdeath", "next", "nextrank", "nextplayers", "hlx_next", "load", "status", "servers",
         "top", "top20", "top15", "top12", "top10", "top5", "clans", "bans", "cheaters", "statsme",
         "weapons", "weapon", "weapon_usage", "action", "actions", "accuracy", "targets",
-        "target", "kills", "kill", "player_kills", "map", "maps", "map_stats",
+        "target", "kills", "kill", "player_kills", "mapstats", "map_stats", "hlx_maps",
         "cmd", "cmds", "command", "commands",
         "hlx_display 0", "hlx_display 1", "hlx_teams 0", "hlx_teams 1",
         "hlx_hideranking", "hlx_chat 0", "hlx_chat 1", "hlx_menu",
@@ -244,9 +244,9 @@ public partial class HLStatsX : BasePlugin
         RegisterPlayerStatsCommand("player_kills");
         RegisterPlayerStatsCommand("action");
         RegisterPlayerStatsCommand("actions");
-        RegisterPlayerStatsCommand("map");
-        RegisterPlayerStatsCommand("maps");
-        RegisterPlayerStatsCommand("map_stats");
+        RegisterPlayerStatsCommand("mapstats", "maps");
+        RegisterPlayerStatsCommand("map_stats", "maps");
+        RegisterPlayerStatsCommand("hlx_maps", "maps");
         RegisterPlayerStatsCommand("clans");
         RegisterPlayerStatsCommand("cheaters");
         RegisterPlayerStatsCommand("bans");
