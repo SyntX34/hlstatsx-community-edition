@@ -293,7 +293,8 @@ public partial class HLStatsX : BasePlugin
                 ("Top Clans",        () => { CloseCustomHud(playerId); DispatchPlayerStatCommand(player, "clans", "say"); }, true),
                 ("Server Status",    () => { CloseCustomHud(playerId); DispatchPlayerStatCommand(player, "status", "say"); }, true),
                 ("Toggle Ranking",   () => { CloseCustomHud(playerId); DispatchPlayerStatCommand(player, "hlx_hideranking", "say"); }, true),
-                ("Help & Commands",  () => { CloseCustomHud(playerId); DispatchPlayerStatCommand(player, "help", "say"); }, true)
+                ("Help & Commands",  () => { CloseCustomHud(playerId); DispatchPlayerStatCommand(player, "help", "say"); }, true),
+                ("HLstatsX Settings",() => OpenSettingsMenu(player), true)
             };
 
             var state = new CustomMenuState

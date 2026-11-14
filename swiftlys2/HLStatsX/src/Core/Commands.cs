@@ -279,6 +279,12 @@ public partial class HLStatsX : BasePlugin
         RegisterMenuCommand("hlxmenu");
         RegisterMenuCommand("hlx_menu");
         RegisterMenuCommand("statsmenu");
+
+        Core.Command.RegisterCommand("hlx_settings", (context) =>
+        {
+            if (!context.IsSentByPlayer || context.Sender is not { } player || !player.IsValid) return;
+            OpenSettingsMenu(player);
+        }, registerRaw: false);
     }
 }
 

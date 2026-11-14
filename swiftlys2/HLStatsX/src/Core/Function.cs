@@ -194,6 +194,12 @@ public partial class HLStatsX : BasePlugin
         if (player == null || !player.IsValid || player.IsFakeClient) return;
         if (string.IsNullOrWhiteSpace(message)) return;
 
+        bool isMuted = IsPlayerChatMuted(player);
+        string chatMode = GetPlayerChatMode(player);
+        if (isMuted && chatMode == "chat") return;
+
+        var msgType = chatMode == "console" ? MessageType.Console : MessageType.Chat;
+
         var lines = message.Replace("\r\n", "\n").Split('\n', StringSplitOptions.RemoveEmptyEntries);
         foreach (var line in lines)
         {
@@ -201,7 +207,7 @@ public partial class HLStatsX : BasePlugin
             if (string.IsNullOrEmpty(trimmed)) continue;
             var formatted = FormatSourceModMessage(player, trimmed);
             if (!string.IsNullOrWhiteSpace(formatted))
-                player.SendMessage(MessageType.Chat, formatted);
+                player.SendMessage(msgType, formatted);
         }
     }
 
@@ -240,6 +246,12 @@ public partial class HLStatsX : BasePlugin
             if (parts.Length > 0)
             {
                 string cmd = parts[0];
+                if (cmd.Equals("hlx_settings", StringComparison.OrdinalIgnoreCase))
+                {
+                    OpenSettingsMenu(player);
+                    return HookResult.Handled;
+                }
+
                 if (MenuCommands.Contains(cmd))
                 {
                     OpenStatsMenu(player);
@@ -1084,6 +1096,7 @@ public partial class HLStatsX : BasePlugin
         }
 
         CloseAllCustomHuds();
+        ResetMapChangeMutes();
     }
 
     private static string FormatColors(string input)

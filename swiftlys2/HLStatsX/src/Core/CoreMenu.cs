@@ -69,6 +69,20 @@ public partial class HLStatsX : BasePlugin
         AddCmdButton("Toggle Ranking (!hlx_hideranking)", "hlx_hideranking");
         AddCmdButton("Help & Commands (!help)",  "help");
 
+        builder.Add(new ButtonComponent("HLstatsX Settings (!hlx_settings)", ctx =>
+        {
+            var p = ctx.Player;
+            if (p != null && p.IsValid)
+            {
+                Core.Scheduler.NextTick(() =>
+                {
+                    CancelMenuAutoClose(p.PlayerID);
+                    OpenSettingsMenu(p);
+                });
+            }
+            return ValueTask.CompletedTask;
+        }) { CloseOnSelect = true });
+
         _builtinMainMenu = builder.Build();
         return _builtinMainMenu;
     }
