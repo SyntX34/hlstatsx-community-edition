@@ -17,7 +17,7 @@ public partial class HLStatsX : BasePlugin
         public int Page { get; set; }
         public int HoveredIndex { get; set; }
         public bool IsStatsView { get; set; }
-        public int ItemsPerPage => 7;
+        public int ItemsPerPage { get; set; } = 7;
         public int TotalPages => Math.Max(1, (int)Math.Ceiling(Items.Count / (double)ItemsPerPage));
     }
 
@@ -70,7 +70,7 @@ public partial class HLStatsX : BasePlugin
         if (!_playerHuds.TryGetValue(playerId, out var hud) || hud == null || !hud.IsValid) return;
         if (!_customMenuState.TryGetValue(playerId, out var state)) return;
 
-        if (key >= 1 && key <= 7)
+        if (key >= 1 && key <= state.ItemsPerPage)
         {
             int index = (state.Page * state.ItemsPerPage) + (key - 1);
             if (index >= 0 && index < state.Items.Count)
@@ -84,7 +84,7 @@ public partial class HLStatsX : BasePlugin
             return;
         }
 
-        if (key == 7 && state.TotalPages > 1)
+        if (key == 7)
         {
             if (state.Page > 0)
             {
@@ -392,6 +392,7 @@ public partial class HLStatsX : BasePlugin
     {
         int playerId = player.PlayerID;
         int mode = _config.MenuType;
+        state.ItemsPerPage = mode == 2 ? 6 : 7;
 
         string pageInfo = state.TotalPages > 1 ? $"{state.Title} ({state.Page + 1}/{state.TotalPages})" : state.Title;
         hud.SetDialogVariableString("HlxMenuTitle", "menu_title", pageInfo);
