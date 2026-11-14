@@ -208,7 +208,7 @@ public partial class HLStatsX : BasePlugin
                     if (!context.IsSentByPlayer || context.Sender is not { } player || !player.IsValid) return;
                     string arg = context.Args.Length > 0 ? " " + string.Join(" ", context.Args) : "";
                     DispatchPlayerStatCommand(player, $"{targetCmd}{arg}", "say");
-                }, registerRaw: true);
+                }, registerRaw: false);
             }
             catch { }
         }
@@ -270,7 +270,7 @@ public partial class HLStatsX : BasePlugin
             {
                 if (!context.IsSentByPlayer || context.Sender is not { } player || !player.IsValid) return;
                 OpenStatsMenu(player);
-            }, registerRaw: true);
+            }, registerRaw: false);
         }
 
         RegisterMenuCommand("hlx");
