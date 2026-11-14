@@ -167,22 +167,76 @@ public partial class HLStatsX : BasePlugin
         }
     }
 
-    private void MoveScrollableMenuHover(IPlayer player, CCSCustomHudLayout hud, CustomMenuState state, int delta)
+    private static List<int> GetScrollableTargets(CustomMenuState state)
     {
+        var targets = new List<int>();
         int pageStart = state.Page * state.ItemsPerPage;
         int countOnPage = Math.Min(state.ItemsPerPage, state.Items.Count - pageStart);
-        if (countOnPage <= 0) return;
 
-        int newIndex = state.HoveredIndex + delta;
-        if (newIndex < 0) newIndex = countOnPage - 1;
-        else if (newIndex >= countOnPage) newIndex = 0;
+        for (int i = 0; i < countOnPage; i++)
+        {
+            if (state.Items[pageStart + i].IsInteractive)
+                targets.Add(i);
+        }
 
-        state.HoveredIndex = newIndex;
+        if (state.Page > 0 || state.IsStatsView)
+            targets.Add(-1); /* Back / Menu */
+
+        if (state.Page + 1 < state.TotalPages)
+            targets.Add(-2); /* Next */
+
+        targets.Add(-3); /* Exit */
+        return targets;
+    }
+
+    private void MoveScrollableMenuHover(IPlayer player, CCSCustomHudLayout hud, CustomMenuState state, int delta)
+    {
+        var targets = GetScrollableTargets(state);
+        if (targets.Count == 0) return;
+
+        int pos = targets.IndexOf(state.HoveredIndex);
+        int nextPos = pos < 0
+            ? (delta > 0 ? 0 : targets.Count - 1)
+            : (pos + delta + targets.Count) % targets.Count;
+
+        state.HoveredIndex = targets[nextPos];
         RenderCustomMenu(player, hud, state);
     }
 
     private void ExecuteScrollableMenuSelect(IPlayer player, CCSCustomHudLayout hud, CustomMenuState state)
     {
+        if (state.HoveredIndex == -1)
+        {
+            if (state.Page > 0)
+            {
+                state.Page--;
+                state.HoveredIndex = GetScrollableTargets(state).FirstOrDefault();
+                RenderCustomMenu(player, hud, state);
+            }
+            else if (state.IsStatsView)
+            {
+                OpenCustomMenuMain(player);
+            }
+            return;
+        }
+
+        if (state.HoveredIndex == -2)
+        {
+            if (state.Page + 1 < state.TotalPages)
+            {
+                state.Page++;
+                state.HoveredIndex = GetScrollableTargets(state).FirstOrDefault();
+                RenderCustomMenu(player, hud, state);
+            }
+            return;
+        }
+
+        if (state.HoveredIndex == -3)
+        {
+            CloseCustomHud(player.PlayerID);
+            return;
+        }
+
         int index = (state.Page * state.ItemsPerPage) + state.HoveredIndex;
         if (index >= 0 && index < state.Items.Count)
         {
@@ -311,6 +365,7 @@ public partial class HLStatsX : BasePlugin
                 HoveredIndex = 0,
                 IsStatsView = true
             };
+            state.HoveredIndex = GetScrollableTargets(state).FirstOrDefault();
 
             _customMenuState[playerId] = state;
             RenderCustomMenu(player, hud, state);
@@ -388,13 +443,19 @@ public partial class HLStatsX : BasePlugin
         bool showBack = state.Page > 0 || state.IsStatsView;
         SetHudClass(hud, "HlxMenuBack", "Hidden", !showBack);
         SetHudClass(hud, "HlxMenuBack", "Interactive", mode == 3 && showBack);
+        SetHudClass(hud, "HlxMenuBack", "Hovered", mode == 4 && showBack && state.HoveredIndex == -1);
+        SetHudClass(hud, "HlxMenuBack", "Selected", mode == 4 && showBack && state.HoveredIndex == -1);
 
         bool showNext = state.Page + 1 < state.TotalPages;
         SetHudClass(hud, "HlxMenuNext", "Hidden", !showNext);
         SetHudClass(hud, "HlxMenuNext", "Interactive", mode == 3 && showNext);
+        SetHudClass(hud, "HlxMenuNext", "Hovered", mode == 4 && showNext && state.HoveredIndex == -2);
+        SetHudClass(hud, "HlxMenuNext", "Selected", mode == 4 && showNext && state.HoveredIndex == -2);
 
         SetHudClass(hud, "HlxMenuExit", "Hidden", false);
         SetHudClass(hud, "HlxMenuExit", "Interactive", mode == 3);
+        SetHudClass(hud, "HlxMenuExit", "Hovered", mode == 4 && state.HoveredIndex == -3);
+        SetHudClass(hud, "HlxMenuExit", "Selected", mode == 4 && state.HoveredIndex == -3);
 
         if (mode == 4)
         {

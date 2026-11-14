@@ -16,7 +16,7 @@ namespace HLStatsX;
 
 [PluginMetadata(
     Id = "HLStatsX",
-    Version = "1.2.9",
+    Version = "1.3.0",
     Name = "HLStatsX:CE Ingame Plugin (SwiftlyS2)",
     Author = "SyntX34",
     Description = "Provides CS2 in-game interaction and messaging with HLstatsX:CE daemon"
@@ -53,7 +53,7 @@ public partial class HLStatsX : BasePlugin, IHLStatsXApi
     private readonly HashSet<string> _interactingPlugins = new(StringComparer.OrdinalIgnoreCase);
 
     public event Action? OnHLStatsXLoaded;
-    public string PluginVersion => "1.2.9";
+    public string PluginVersion => "1.3.0";
 
     public HLStatsX(ISwiftlyCore core) : base(core)
     {
