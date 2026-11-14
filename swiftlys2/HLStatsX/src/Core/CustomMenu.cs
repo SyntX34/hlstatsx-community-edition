@@ -135,6 +135,28 @@ public partial class HLStatsX : BasePlugin
         {
             MoveScrollableMenuHover(player, hud, state, 1);
         }
+        else if (@event.Key == KeyKind.A)
+        {
+            if (state.Page > 0)
+            {
+                state.Page--;
+                state.HoveredIndex = 0;
+                RenderCustomMenu(player, hud, state);
+            }
+            else if (state.IsStatsView)
+            {
+                OpenCustomMenuMain(player);
+            }
+        }
+        else if (@event.Key == KeyKind.D)
+        {
+            if (state.Page + 1 < state.TotalPages)
+            {
+                state.Page++;
+                state.HoveredIndex = 0;
+                RenderCustomMenu(player, hud, state);
+            }
+        }
         else if (@event.Key == KeyKind.E)
         {
             ExecuteScrollableMenuSelect(player, hud, state);
