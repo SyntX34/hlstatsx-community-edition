@@ -117,12 +117,19 @@ public partial class HLStatsX : BasePlugin
     private void HandleCustomMenuKeyState(IOnClientKeyStateChangedEvent @event)
     {
         if (!@event.Pressed) return;
-        int mode = _config.MenuType;
-        if (mode != 4) return; /* Scrollable menu navigation */
 
         int playerId = @event.PlayerId;
         if (!_playerHuds.TryGetValue(playerId, out var hud) || hud == null || !hud.IsValid) return;
         if (!_customMenuState.TryGetValue(playerId, out var state)) return;
+
+        if (@event.Key == KeyKind.Tab)
+        {
+            CloseCustomHud(playerId);
+            return;
+        }
+
+        int mode = _config.MenuType;
+        if (mode != 4) return; /* Scrollable menu navigation */
 
         var player = Core.PlayerManager.GetPlayer(playerId);
         if (player == null || !player.IsValid) return;
@@ -393,6 +400,15 @@ public partial class HLStatsX : BasePlugin
         int playerId = player.PlayerID;
         int mode = _config.MenuType;
         state.ItemsPerPage = mode == 2 ? 6 : 7;
+
+        if (mode == 4)
+        {
+            var targets = GetScrollableTargets(state);
+            if (targets.Count > 0 && !targets.Contains(state.HoveredIndex))
+            {
+                state.HoveredIndex = targets[0];
+            }
+        }
 
         string pageInfo = state.TotalPages > 1 ? $"{state.Title} ({state.Page + 1}/{state.TotalPages})" : state.Title;
         hud.SetDialogVariableString("HlxMenuTitle", "menu_title", pageInfo);

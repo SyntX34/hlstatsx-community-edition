@@ -27,7 +27,6 @@ public partial class HLStatsX : BasePlugin
         if (BlockedCommands.Contains(fullCleaned) || BlockedCommands.Contains(cmd)) return true;
         if (cmd.StartsWith("top", StringComparison.OrdinalIgnoreCase)) return true;
         if (cmd.StartsWith("hlx_", StringComparison.OrdinalIgnoreCase)) return true;
-        if (WeaponCode.ContainsKey(cmd)) return true;
         return false;
     }
 
